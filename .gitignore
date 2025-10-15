@@ -1,3 +1,11 @@
+# Folders
+
+**/.vscode/**
+**/.pio/**
+
+
+# Files
+
 # Prerequisites
 *.d
 
