@@ -2,6 +2,7 @@
  * Controls writing of variable values to CSV files stored on the SD card.
 */
 #include "SD_MMC.h"
+#include "DataLogging.h"
 #include "dataloggingtry.h"
 #include "config.h"
 #include "context.h"
@@ -54,7 +55,7 @@ void dataLoggingTask(void *dlData) {
 bool startSD() {
   /// startSD() attempts to begin communication with the SD card on SPI (SDIO)
   ///Returns true if no errors exist, returns false if an error exists
-  SD_MMC.setPins(4,5,6,7,8,9);
+  SD_MMC.setPins(SD_clk,SD_cmd,SD_d0,SD_d1,SD_d2,SD_d3);
   if (!SD_MMC.begin("/sdcard", true)) {
     Serial.println("ERROR: SD Card Mounting Failed");
     return false; 
