@@ -167,70 +167,63 @@ void preChargeCircuitFSMStateActions () {
 }
 
 void gyro_signals(GyroKalman *gyro_kalman) {
-  // Start I2C communication with MPU6050
-  Wire.beginTransmission(0x68); // 0x68 is default register value for MPU6050
-
-  // Switch on low pass filter
-  Wire.write(0x1A); // activate low pass filter
-  Wire.write(0x05); // cut off frequency of 10 Hz
-  Wire.endTransmission();
-
-  // Configure accelerometer output
+  // Read accelerometer and gyroscope data from MPU6050
   Wire.beginTransmission(0x68);
-  Wire.write(0x1C); // 1C is relevant register
-  Wire.write(0x10); // full scale range of +/-8g
-  Wire.endTransmission();
+  Wire.write(0x3B); // starting register for accelerometer data
+  byte error = Wire.endTransmission(false); // Keep connection active with restart
+  if (error != 0) {
+    return;
+  }
+  
+  // Request 14 bytes: 6 accel + 2 temp + 6 gyro
+  byte bytesReceived = Wire.requestFrom(0x68, 14, true);
+  if (bytesReceived != 14) {
+    return;
+  }
 
-  // Access registers storing accelerometer measurements
-  Wire.beginTransmission(0x68);
-  Wire.write(0x3B);
-  Wire.endTransmission();
-  Wire.requestFrom(0x68, 6);
-
-  // Read accelerometer measurements
-  int16_t AccXLSB = Wire.read() << 8 | Wire.read(); // x-direction
-  int16_t AccYLSB = Wire.read() << 8 | Wire.read(); // y-direction
-  int16_t AccZLSB = Wire.read() << 8 | Wire.read(); // z-direction
-
-  // Configure gyroscope output and pull rotation rate measurements from sensor
-  // Set sensitivity scale factor
-  Wire.beginTransmission(0x68);
-  Wire.write(0x1B); // 1B is hexadecimal associated with gyroscope configuration
-  Wire.write(0x8); // 8 is hexadecimal for LSB sensitivity of 65.6 LSB/degree/second
-  Wire.endTransmission();
-
-  // Access registers storing gyro measurements
-  Wire.beginTransmission(0x68);
-  Wire.write(0x43);
-  Wire.endTransmission();
-  Wire.requestFrom(0x68, 6);
-
-  // Read gyro measurements
-  int16_t GyroX = Wire.read() << 8 | Wire.read(); // around x-axis
-  int16_t GyroY = Wire.read() << 8 | Wire.read(); // around y-axis
-  int16_t GyroZ = Wire.read() << 8 | Wire.read(); // around z-axis
+  // Read accelerometer measurements (6 bytes)
+  int16_t AccXLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccYLSB = Wire.read() << 8 | Wire.read();
+  int16_t AccZLSB = Wire.read() << 8 | Wire.read();
+  
+  // Skip temperature readings (2 bytes)
+  Wire.read();
+  Wire.read();
+  
+  // Read gyro measurements (6 bytes)
+  int16_t GyroX = Wire.read() << 8 | Wire.read();
+  int16_t GyroY = Wire.read() << 8 | Wire.read();
+  int16_t GyroZ = Wire.read() << 8 | Wire.read();
 
   // Convert measurement units to degree/second
   gyro_kalman->RateRoll = (float)GyroX / 65.5;
   gyro_kalman->RatePitch = (float)GyroY / 65.5;
   gyro_kalman->RateYaw = (float)GyroZ / 65.5;
 
-  // Convert measurements to from LSB to g
-  // Divide 4096 because full range +/-8g is associated with 4096 LSB/g
+  // Convert measurements from LSB to g (4096 LSB/g for +/-8g range)
   gyro_kalman->AccX = (float)AccXLSB / 4096;
   gyro_kalman->AccY = (float)AccYLSB / 4096;
   gyro_kalman->AccZ = (float)AccZLSB / 4096;
 
+  // Calculate absolute angles
   float AccX = gyro_kalman->AccX;
   float AccY = gyro_kalman->AccY;
   float AccZ = gyro_kalman->AccZ;
-
-  // Calculate absolute angles
-  // IMPORTANT LINE OF CODE:
-  //    - WE CAN ADD OR SUBTRACT FROM THE ANGLE DEPENDING ON THE PLACEMENT OF GYROSCOPE
-  //    - EX: If MPU6050 is laid on port side, add 90 to AnglePitch
-  gyro_kalman->AngleRoll = (atan(AccY / sqrt(AccX * AccX + AccZ * AccZ)) * 1 / (3.142 / 180)) + 5;
-  gyro_kalman->AnglePitch = (-atan(AccX / sqrt(AccY * AccY + AccZ * AccZ)) * 1 / (3.142 / 180));
+  
+  float denomRoll = sqrt(AccX * AccX + AccZ * AccZ);
+  float denomPitch = sqrt(AccY * AccY + AccZ * AccZ);
+  
+  if (denomRoll > 0.001) {
+    gyro_kalman->AngleRoll = (atan(AccY / denomRoll) * 57.2958) + 5;
+  } else {
+    gyro_kalman->AngleRoll = 0.0;
+  }
+  
+  if (denomPitch > 0.001) {
+    gyro_kalman->AnglePitch = -atan(AccX / denomPitch) * 57.2958;
+  } else {
+    gyro_kalman->AnglePitch = 0.0;
+  }
 }
 
 void kalman_1d(float KalmanState, float KalmanUncertainty, float KalmanInput, float KalmanMeasurement, GyroKalman *gyro_kalman) {
@@ -253,29 +246,143 @@ void updateGyroData(GyroKalman *gyro_kalman) {
 
   // Calculate Roll angle (around x axis)
   kalman_1d(gyro_kalman->angle_X, gyro_kalman->KalmanUncertaintyAngleRoll, gyro_kalman->RateRoll, gyro_kalman->AngleRoll, gyro_kalman);
-
-  // Update Kalman output to angle roll and uncertaintity
   gyro_kalman->angle_X = gyro_kalman->Kalman1DOutput[0];
   gyro_kalman->KalmanUncertaintyAngleRoll = gyro_kalman->Kalman1DOutput[1];
 
   // Calculate Pitch angle (around y-axis)
   kalman_1d(gyro_kalman->angle_Y, gyro_kalman->KalmanUncertaintyAnglePitch, gyro_kalman->RatePitch, gyro_kalman->AnglePitch, gyro_kalman);
-
-  // Update Kalman output to angle pitch and uncertaintity
   gyro_kalman->angle_Y = gyro_kalman->Kalman1DOutput[0];
   gyro_kalman->KalmanUncertaintyAnglePitch = gyro_kalman->Kalman1DOutput[1];
 }
 
 void initI2C(GyroKalman *gyro_kalman) {
-  Wire.setClock(400000); // MPU6050 supports up to 400k Hz in specifications
-  Wire.begin();
-  delay(50); // give delay for device to start
+  // Initialize all variables to 0
+  gyro_kalman->angle_X = 0.0;
+  gyro_kalman->angle_Y = 0.0;
+  gyro_kalman->KalmanUncertaintyAngleRoll = 2.0;  // Start with some uncertainty
+  gyro_kalman->KalmanUncertaintyAnglePitch = 2.0;
 
-  // Start gyro in power mode
+  Serial.println("\n[GYRO INIT] ========================================");
+  Serial.println("[GYRO INIT] Starting I2C initialization...");
+  
+  Wire.begin();
+  Wire.setClock(100000); // Use 100kHz (standard mode) for more reliability
+  Serial.println("[GYRO INIT] I2C clock set to 100kHz");
+  delay(250); // give delay for device to start
+
+  // Scan I2C bus for devices
+  Serial.println("[GYRO INIT] Scanning I2C bus...");
+  int devicesFound = 0;
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    byte error = Wire.endTransmission();
+    if (error == 0) {
+      Serial.printf("[GYRO INIT] I2C device found at address 0x%02X\n", address);
+      devicesFound++;
+    }
+  }
+  
+  if (devicesFound == 0) {
+    Serial.println("[GYRO INIT] ERROR: No I2C devices found!");
+    Serial.println("[GYRO INIT] Check:");
+    Serial.println("[GYRO INIT]   - MPU6050 is powered (VCC to 3.3V)");
+    Serial.println("[GYRO INIT]   - SDA and SCL connections");
+    Serial.println("[GYRO INIT]   - Pull-up resistors on SDA/SCL (4.7k)");
+    return;
+  }
+  
+  Serial.printf("[GYRO INIT] Found %d I2C device(s)\n", devicesFound);
+  
+  // Try address 0x68 first (AD0 = LOW)
+  Serial.println("[GYRO INIT] Attempting to wake MPU6050 at 0x68...");
   Wire.beginTransmission(0x68);
-  Wire.write(0x6B); // 6B is relevant register
-  Wire.write(0x00); // all bits must be 0 to start and continue device
-  Wire.endTransmission();
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Set to 0 to wake up the MPU6050
+  byte error = Wire.endTransmission(true);
+  
+  if (error != 0) {
+    // Try address 0x69 (AD0 = HIGH)
+    Serial.printf("[GYRO INIT] Address 0x68 failed (error %d), trying 0x69...\n", error);
+    Wire.beginTransmission(0x69);
+    Wire.write(0x6B);
+    Wire.write(0x00);
+    error = Wire.endTransmission(true);
+    
+    if (error != 0) {
+      Serial.printf("[GYRO INIT] ERROR: MPU6050 not responding at 0x68 or 0x69 (error %d)\n", error);
+      Serial.println("[GYRO INIT] Error codes: 0=success, 1=too long, 2=NACK address, 3=NACK data, 4=other");
+      return;
+    }
+    
+    // Success at 0x69 - update the address for all future operations
+    Serial.println("[GYRO INIT] SUCCESS: MPU6050 found at address 0x69!");
+    Serial.println("[GYRO INIT] NOTE: You need to change all 0x68 to 0x69 in the code!");
+    return; // Exit for now so user can update the code
+  }
+  
+  Serial.println("[GYRO INIT] MPU6050 awake at address 0x68");
+  
+  // Configure low pass filter (once at startup)
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A); // CONFIG register
+  Wire.write(0x05); // Set DLPF to 10Hz cutoff
+  Wire.endTransmission(true);
+  Serial.println("[GYRO INIT] Low-pass filter configured");
+  
+  // Configure accelerometer range (once at startup)
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1C); // ACCEL_CONFIG register
+  Wire.write(0x10); // Set to +/-8g range
+  Wire.endTransmission(true);
+  Serial.println("[GYRO INIT] Accelerometer range set to +/-8g");
+  
+  // Configure gyroscope range (once at startup)
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B); // GYRO_CONFIG register
+  Wire.write(0x08); // Set to +/-500 deg/s range
+  Wire.endTransmission(true);
+  Serial.println("[GYRO INIT] Gyroscope range set to +/-500 deg/s");
+  
+  // Give MPU6050 time to stabilize after configuration
+  Serial.println("[GYRO INIT] Waiting for sensor to stabilize...");
+  delay(500);
+  
+  // Re-wake sensor (some MPU6050 clones go back to sleep)
+  Serial.println("[GYRO INIT] Re-waking sensor...");
+  Wire.beginTransmission(0x68);
+  Wire.write(0x6B); // PWR_MGMT_1 register
+  Wire.write(0x00); // Ensure awake
+  Wire.endTransmission(true);
+  delay(50);
+  
+  // Test read to verify sensor is readable
+  Serial.println("[GYRO INIT] Testing sensor read...");
+  Wire.beginTransmission(0x68);
+  Wire.write(0x75); // WHO_AM_I register
+  byte testError = Wire.endTransmission(false);
+  if (testError != 0) {
+    Serial.printf("[GYRO INIT] ERROR: Cannot communicate with sensor after config (error %d)\n", testError);
+    Serial.println("[GYRO INIT] This may indicate:");
+    Serial.println("[GYRO INIT]   - Faulty/clone MPU6050 chip");
+    Serial.println("[GYRO INIT]   - Inadequate power supply");
+    Serial.println("[GYRO INIT]   - Missing/weak pull-up resistors");
+    return;
+  }
+  
+  byte bytesRcvd = Wire.requestFrom(0x68, 1, true);
+  if (bytesRcvd == 1) {
+    byte whoami = Wire.read();
+    Serial.printf("[GYRO INIT] WHO_AM_I register = 0x%02X (should be 0x68)\n", whoami);
+    if (whoami != 0x68) {
+      Serial.println("[GYRO INIT] WARNING: Unexpected WHO_AM_I value!");
+    }
+  } else {
+    Serial.printf("[GYRO INIT] ERROR: Failed to read WHO_AM_I (got %d bytes)\n", bytesRcvd);
+    return;
+  }
+  
+  Serial.println("[GYRO INIT] Sensor read test successful!");
+  Serial.println("[GYRO INIT] Starting calibration (2 seconds)...");
 
   // Perform gyroscope calibration measurements
   // 2000 milliseconds = 2 seconds to add all measured variables to calibration variables
@@ -298,11 +405,11 @@ void initI2C(GyroKalman *gyro_kalman) {
 void preChargeTask(void *taskData) {
   PreChargeTaskData preChargeData = *(PreChargeTaskData *)taskData;
   GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+
   while (1) {
     preChargeCircuitFSMStateActions();
     preChargeCircuitFSMTransitions(preChargeData);
-    //Serial.println(gyro_kalman->angle_X);
-    //Serial.println(gyro_kalman->angle_Y);
+
     updateGyroData(gyro_kalman);
 
     // 100 ms should be unnoticeable compared to other task updates
