@@ -2,6 +2,9 @@
 */
 
 #include "arduino_freertos.h"
+
+using namespace arduino;
+
 #include "avr/pgmspace.h"
 #include "Main.h"
 #include "CAN.h"
