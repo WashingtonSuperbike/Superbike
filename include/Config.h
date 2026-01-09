@@ -12,8 +12,7 @@
         \n \n
 */
 
-#ifndef _CONFIG_H
-#define _CONFIG_H
+#pragma once
 
 /// This primarily exists to debug the changes made in the FlexCAN library.
 /// If there are no devices connected on the CAN bus, the firmware crashes
@@ -35,5 +34,3 @@
 #define CONFIG_LOG_COUNT 7
 
 //#define CONFIG_TEST_SCREEN_DATA 1
-
-#endif // _CONFIG_H

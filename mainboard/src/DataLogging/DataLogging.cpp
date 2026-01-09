@@ -3,11 +3,9 @@
 */
 #include "SD_MMC.h"
 #include "DataLogging.h"
-#include "dataloggingtry.h"
-#include "config.h"
-#include "context.h"
-#include "arduino_freertos.h"
-#include "avr/pgmspace.h"
+#include "Config.h"
+#include "Context.h"
+#include "../GPIO/Pins.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -16,14 +14,18 @@ const size_t BUF_DIM = 4096;
 /// Represents the time that recording started
 unsigned long epochTime;
 
+/// Module-level logs array (moved from Context)
+/// Note: This array needs to be initialized in main.cpp or here before use
+static CSVWriter logs[CONFIG_LOG_COUNT];
+
 
 void dataLoggingTask(void *dlData) {
   /// The dataLoggingTask() processes the data, for each of the logs.
   /// Just uses sdFat methods within the helper methods addRecord(), saveFiles() as
   /// required to process the neatly organized CSVWriter data and then save it.
-  DataLoggingTaskData *dl = (DataLoggingTaskData *)dlData;
-  Context *context = dl->context;
-  CSVWriter *writers = context->logs;
+  superbike::DataLoggingTaskData *dl = (superbike::DataLoggingTaskData *)dlData;
+  superbike::Context *context = dl->context;
+  CSVWriter *writers = logs;  // Use module-level logs array
   const TickType_t epoch = xTaskGetTickCount();
   TickType_t last_save = xTaskGetTickCount();
   TickType_t now = xTaskGetTickCount();
@@ -60,7 +62,7 @@ bool startSD() {
     Serial.println("ERROR: SD Card Mounting Failed");
     return false; 
   } 
-  if (SD_MMC.cardtype() == CARD_NONE) {
+  if (SD_MMC.cardType() == CARD_NONE) {
     Serial.println("No SD card attached");
     return false;
   }
@@ -71,10 +73,10 @@ bool openFile(CSVWriter *writer) {
   /// openFile() attemps to open the file designated at the filename inside CSVWriter
   /// Returns true if no errors, returns false if any error exists
   String fullPath = String("/sdcard/") + writer->filename;
-  writer->file = SD_MMC.open(fullPath.c_str(), O_RDWR | O_CREAT | O_TRUNC);
+  writer->file = SD_MMC.open(fullPath.c_str(), FILE_WRITE);  // Use FILE_WRITE mode
   writer->open = (bool)writer->file;
   if (!writer->open) {
-    Serial.printf("ERROR: Failed to open file %s\n", writer->filename); 
+    Serial.printf("ERROR: Failed to open file %s\n", writer->filename);
   }
   return writer->open;
 }
@@ -150,9 +152,11 @@ void addRecord(CSVWriter *writer, int sTime) {
   String sRecord = String(sTime);
   for (int i = 0; i < writer->dataValuesLen; i++) {
     if (writer->D_TYPE == FLOAT) {
-      sRecord.concat(",").concat(writer->dataValues[i]);
+      sRecord.concat(",");
+      sRecord.concat(writer->dataValues[i]);
     } else if (writer->D_TYPE == INT) {
-      sRecord.concat(",").concat(int(writer->dataValues[i]));
+      sRecord.concat(",");
+      sRecord.concat(int(writer->dataValues[i]));
     }
   }
   writer->file.println(sRecord);

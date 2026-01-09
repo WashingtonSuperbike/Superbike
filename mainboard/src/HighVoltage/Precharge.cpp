@@ -1,39 +1,14 @@
 /**
  * Contains all precharge + HV related state machine controls.
- * Estimates gyro angle using Kalman filter.
 */
 #include "Precharge.h"
-#include <Wire.h>
-#include "GPIO.h"
-
-// I2C is incredibly unstable? Or perhaps not using proper wiring causes this,
-// but the reading in precharge data can often bug out and output
-// "nan" because of randomness? I would personally recommend
-// having some sort of true or false based
-// indicator at the bottom right of the speedometer screen
-// that outputs "true" or something to indicate
-// that the gyro is not bugging out. Or perhaps
-// output the gyro data on the bottom right
-// to indicate danger? Something like that.
-
-// OKAY, MAKE SURE YOU READ THIS IF YOU SEE ISSUES WITH THE GYRO.
-// By my *limited* understanding, I think the problem is that
-// the gyro needs to be consistently powered, hence why proper
-// gyro setup code has a significant delay between
-// turning the thing on and actually reading data from it.
-// An easy way to work around it, is to power on the Teensy
-// and then once everything is up and running,
-// reprogram it by using the button on the board.
-// In the case of the actual race, I would turn on low-voltage
-// and then wait a second and then turn it off and then
-// turn it back on.
 
 /* Current HV state */
 static HV_STATE hv_state = HV_OFF;
 
 // Returns true if the motor controller is done precharging.
 // Returns false otherwise.
-bool isPrecharged(PreChargeTaskData preChargeData) {
+bool isPrecharged(superbike::PreChargeTaskData preChargeData) {
 
   BatteryVoltages battery_voltages = preChargeData.context->battery_voltages;
   MotorStats motor_stats = preChargeData.context->motor_stats;
@@ -52,7 +27,7 @@ bool isPrecharged(PreChargeTaskData preChargeData) {
 }
 
 // this function returns true if there are no HV errors detected on the bike
-bool isHVSafe(PreChargeTaskData preChargeData) {
+bool isHVSafe(superbike::PreChargeTaskData preChargeData) {
   //BMSStatus bmsStatus = preChargeData.bmsStatus;
   MotorTemps motor_temps = preChargeData.context->motor_temps;
 
@@ -84,9 +59,9 @@ const char* state_name(HV_STATE state) {
 }
 
 // NOTE: "input" needs to change to the GPIO value for the on-button for the bike
-void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
+void preChargeCircuitFSMTransitions (superbike::PreChargeTaskData preChargeData) {
   HV_STATE old_state = hv_state;
-  GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+  GyroData *gyro_data = &preChargeData.context->gyro_data;
   switch (hv_state) { // transitions
     case HV_OFF:
       if (check_HV_toggle()) {
@@ -116,7 +91,7 @@ void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
-      else if (!isHVSafe(preChargeData) || gyro_kalman->yaw_angle > 45 || gyro_kalman->yaw_angle < -45 || gyro_kalman->roll_angle > 45 || gyro_kalman->roll_angle < -45) {
+      else if (!isHVSafe(preChargeData) || gyro_data->yaw_angle > 45 || gyro_data->yaw_angle < -45 || gyro_data->roll_angle > 45 || gyro_data->roll_angle < -45) {
         // HV error detected
         hv_state = HV_ERROR;
       }

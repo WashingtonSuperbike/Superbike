@@ -3,8 +3,14 @@
     If any errors are detected in the CAN nodes, prints the relevant error to syslog.
 */
 #include "CAN.h"
+#include <Arduino.h>
 #include "driver/gpio.h"
-#include "driver/can.h"
+#include "driver/twai.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+// Global message buffer for CAN reception
+static twai_message_t message;
 
 /**
  * Ensure CAN bus is initialized and configured properly
@@ -13,26 +19,26 @@
 {
     // Initialize configuration structures using macro initializers
     // TODO: Maybe adjust and utilize specific timing and filter configurations
-    can_general_config_t g_config = CAN_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, CAN_MODE_NORMAL);
-    can_timing_config_t t_config = CAN_TIMING_CONFIG_500KBITS();
-    can_filter_config_t f_config = CAN_FILTER_CONFIG_ACCEPT_ALL();
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
+    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
-    //Set up CAN driver
-    if (can_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
-        printf("Failed to install driver\n");
+    //Set up TWAI driver (CAN for ESP32-S3)
+    if (twai_driver_install(&g_config, &t_config, &f_config) != ESP_OK) {
+        printf("Failed to install TWAI driver\n");
         return;
     }
-    if (can_start() != ESP_OK) {
-        printf("Failed to start driver\n");
+    if (twai_start() != ESP_OK) {
+        printf("Failed to start TWAI driver\n");
         return;
     }
 }
 
-void decipherEVCCStats(can_message_t msg, ChargeControllerStats *evcc_stats)
+void decipherEVCCStats(twai_message_t msg, ChargeControllerStats *evcc_stats)
 {
     // Check that msg has at least 5 data bytes
-    if (msg.len < 5) {
-        printf("Invalid EVCC_STATS message length: %d\n", msg.len);
+    if (msg.data_length_code < 5) {
+        printf("Invalid EVCC_STATS message length: %d\n", msg.data_length_code);
         return;
     }
     evcc_stats->en = (msg.data[0]);
@@ -40,11 +46,11 @@ void decipherEVCCStats(can_message_t msg, ChargeControllerStats *evcc_stats)
     evcc_stats->charge_current = (3200 - ((msg.data[4] << 8) | msg.data[3])) / 10.0;
 }
 
-void decipherChargerStats(can_message_t msg, ChargerStats *charger_stats)
+void decipherChargerStats(twai_message_t msg, ChargerStats *charger_stats)
 {    
     // Check that msg has at least 7 data bytes
-    if (msg.len < 7) {
-        printf("Invalid CHARGER_STATS message length: %d\n", msg.len);
+    if (msg.data_length_code < 7) {
+        printf("Invalid CHARGER_STATS message length: %d\n", msg.data_length_code);
         return;
     }
     charger_stats->status_flag = msg.data[0];
@@ -54,11 +60,11 @@ void decipherChargerStats(can_message_t msg, ChargerStats *charger_stats)
     charger_stats->charger_temp = msg.data[6] - 40;
 }
 
-void decodeMotorStats(can_message_t msg, MotorStats *motor_stats)
+void decodeMotorStats(twai_message_t msg, MotorStats *motor_stats)
 {
     // Check that msg has at least 8 data bytes
-    if (msg.len < 8) {
-        printf("Invalid MOTOR_STATS message length: %d\n", msg.len);
+    if (msg.data_length_code < 8) {
+        printf("Invalid MOTOR_STATS message length: %d\n", msg.data_length_code);
         return;
     }
     motor_stats->RPM = (float)((msg.data[1] << 8) | msg.data[0]);
@@ -67,11 +73,11 @@ void decodeMotorStats(can_message_t msg, MotorStats *motor_stats)
     motor_stats->error_message = ((msg.data[7] << 8) | msg.data[6]);
 }
 
-void decodeMotorTemps(can_message_t msg, MotorTemps *motor_temps)
+void decodeMotorTemps(twai_message_t msg, MotorTemps *motor_temps)
 {
     // Check that msg has at least 5 data bytes
-    if (msg.len < 5) {
-        printf("Invalid MOTOR_TEMPS message length: %d\n", msg.len);
+    if (msg.data_length_code < 5) {
+        printf("Invalid MOTOR_TEMPS message length: %d\n", msg.data_length_code);
         return;
     }
     motor_temps->throttle = msg.data[0] / 255.0;
@@ -80,11 +86,11 @@ void decodeMotorTemps(can_message_t msg, MotorTemps *motor_temps)
     motor_temps->controller_status = msg.data[4];
 }
 
-void decipherBMSStatus(can_message_t msg, BMSStatus *bms_status)
+void decipherBMSStatus(twai_message_t msg, BMSStatus *bms_status)
 {
     // Check that msg has at least 5 data bytes
-    if (msg.len < 5) {
-        printf("Invalid BMS_STATUS message length: %d\n", msg.len);
+    if (msg.data_length_code < 5) {
+        printf("Invalid BMS_STATUS message length: %d\n", msg.data_length_code);
         return;
     }
     bms_status->bms_status_flag = (float)(msg.data[0]);
@@ -107,11 +113,11 @@ static void calculateSeriesVoltage(BatteryVoltages *battery_voltages)
 }
 
 
-void decipherCellsVoltage(can_message_t msg, BatteryVoltages *battery_voltages)
+void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *battery_voltages)
 {
     // Check that msg has at least 16 data bytes (4 cells x 4 bytes each)
-    if (msg.len < 16) {
-        printf("Invalid CELL_VOLTAGES message length: %d\n", msg.len);
+    if (msg.data_length_code < 16) {
+        printf("Invalid CELL_VOLTAGES message length: %d\n", msg.data_length_code);
         return;
     }
     // TODO: THE FOLLOWING DATATYPE NEEDS TO BE CHANGED
@@ -146,11 +152,11 @@ void decipherCellsVoltage(can_message_t msg, BatteryVoltages *battery_voltages)
     }
 }
 
-void decipherThermistors(can_message_t msg, ThermistorTemps *thermistor_temps)
+void decipherThermistors(twai_message_t msg, ThermistorTemps *thermistor_temps)
 {
     // Check that msg has at least 7 data bytes
-    if (msg.len < 16) {
-        printf("Invalid DD_BMSC_TH_STATUS_IND message length: %d\n", msg.len);
+    if (msg.data_length_code < 16) {
+        printf("Invalid DD_BMSC_TH_STATUS_IND message length: %d\n", msg.data_length_code);
         return;
     }
     byte ltcID = msg.data[0];
@@ -169,9 +175,9 @@ void decipherThermistors(can_message_t msg, ThermistorTemps *thermistor_temps)
 
 
 // used to print the contents of a CAN msg
-void printMessage(can_message_t msg)
+void printMessage(twai_message_t msg)
 {
-    for (int i = 0; i < msg.len; i++)
+    for (int i = 0; i < msg.data_length_code; i++)
     {
         Serial.print(msg.data[i]);
         Serial.print(":");
@@ -220,12 +226,13 @@ void printBMSStatus(BMSStatus bms_status)
 void requestCellVoltages()
 {
     static int next_can_id = BMSC1_LTC1_REQUEST_CELLS;
-    can_message_t cellVoltageRxMsg = {};
+    twai_message_t cellVoltageRxMsg = {};
     cellVoltageRxMsg.identifier = next_can_id;
-    cellVoltageRxMsg.flags = CAN_MSG_FLAG_EXTD | CAN_MSG_FLAG_RTR; // set for 29-bit IDs
+    cellVoltageRxMsg.extd = 1; // Extended 29-bit ID
+    cellVoltageRxMsg.rtr = 1;  // Remote transmission request
     cellVoltageRxMsg.data_length_code = 0; // no data payload
 
-    if (can_transmit(&cellVoltageRxMsg, pdMS_TO_TICKS(1000)) != ESP_OK) {
+    if (twai_transmit(&cellVoltageRxMsg, pdMS_TO_TICKS(1000)) != ESP_OK) {
         printf("Failed to request cell voltages\n");
     }
 
@@ -240,17 +247,17 @@ void requestCellVoltages()
  * 
  * @param canData struct containing pointer to bike context
  *  */ 
-static void checkCAN(CANTaskData canData)
+static void checkCAN(superbike::CANTaskData canData)
 {
-    Context *context = canData.bike_context;
+    superbike::Context *context = canData.bike_context;
 
-    if (can_receive(&message, pdMS_TO_TICKS(0)) != ESP_OK) {
+    if (twai_receive(&message, pdMS_TO_TICKS(0)) != ESP_OK) {
         // No message received
         return;
     }
 
     // Check what kind of message we received and decode accordingly
-    switch (message.id)
+    switch (message.identifier)
     {
     case MOTOR_STATS_MSG:
         decodeMotorStats(message, &(context->motor_stats));
@@ -290,7 +297,7 @@ static void checkCAN(CANTaskData canData)
         break;
     default:
         // Unrecognized message ID
-        printf("Received unrecognized CAN message ID: 0x%X\n", message.id);
+        printf("Received unrecognized CAN message ID: 0x%lX\n", message.identifier);
         break;
 
     }
@@ -311,7 +318,7 @@ void canTask(void *canData)
         / Therefore, change CAN_NODES in Main.h to make sure things dont break. */
         if (CAN_NODES != 0)
         {
-            checkCAN(*(CANTaskData *)canData);
+            checkCAN(*(superbike::CANTaskData *)canData);
             /* Ask for other half of cell voltages from BMS every 2 seconds, 
             test timings later to improve boot performance */
             if (xTaskGetTickCount() > (last_request + 2000))
