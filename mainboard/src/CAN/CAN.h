@@ -16,5 +16,19 @@
 struct CANTaskData;
 
 // Function declarations
+
+/**
+ * A FreeRTOS task that continuously checks the CAN bus for new messages
+ * 
+ * @param canData pointer to the CAN task data structure
+ */
+
 void canTask(void *canData);
-void initCAN();
+
+/**
+ * Ensure CAN bus is initialized and configured properly.
+ * 
+ * @returns 0 if initialization is successful, negative error code otherwise 
+ */
+int initCAN();
+
