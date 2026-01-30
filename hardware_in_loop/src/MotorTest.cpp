@@ -162,6 +162,17 @@ void sendStallFault() {
   Serial.println("Sent: Stall Fault");
 }
  
+void sendInternalVoltsFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+  msg.id = MOTOR_STATS_MSG;
+  msg.len = 8;
+  for(int i=0; i<8; i++) msg.buf[i] = 0;
+  msg.buf[6] = INTERNAL_VOLTS_FAULT;
+  CAN_2.write(msg);
+  Serial.println("Sent: Internal Volts Fault");
+}
+
 void sendOverTemperatureFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
