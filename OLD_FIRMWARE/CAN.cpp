@@ -3,9 +3,19 @@
     If any errors are detected in the CAN nodes, prints the relevant error to syslog.
 */
 #include "CAN.h"
-#include "FlexCAN_T4.h"
 #include "arduino_freertos.h"
 #include "avr/pgmspace.h"
+
+// Bring Arduino constants from arduino:: namespace to global namespace
+// for compatibility with FlexCAN_T4 library
+using arduino::HEX;
+
+// Define constrain function for FlexCAN_T4 library compatibility
+#ifndef constrain
+#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#endif
+
+#include "FlexCAN_T4.h"
 
 /* CAN bus handle */
 FlexCAN_T4<CAN2, RX_SIZE_256, TX_SIZE_16> CAN_bus;
@@ -210,7 +220,6 @@ void requestCellVoltages() {
 
 void canTask(void *canData) {
   TickType_t last_request = xTaskGetTickCount();
-  int requests = 0;
   while (1) {
     /* NOTE: CAN breaks if we try sending messages with 0 other nodes on the bus.
     / Therefore, change CAN_NODES in Main.h to make sure things dont break. */

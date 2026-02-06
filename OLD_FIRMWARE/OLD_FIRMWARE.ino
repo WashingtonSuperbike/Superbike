@@ -15,7 +15,6 @@ using namespace arduino;
 #include "GPIO.h"
 #include <TimeLib.h>
 
-
 static Context bike_context;
 static Context *context = &bike_context;
 
