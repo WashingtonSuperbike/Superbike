@@ -31,7 +31,10 @@ void sendNormal();
 
 void setup() {
     Serial.begin(115200);
-    while(!Serial); 
+    // Wait up to 3s for USB CDC connection, then continue anyway
+    unsigned long start = millis();
+    while (!Serial && millis() - start < 3000);
+    delay(100);
     Serial.println("BMS Simulator Starting (ESP32-S3 TWAI)...");
     pinMode(LED_PIN, OUTPUT);
 
@@ -52,6 +55,8 @@ void setup() {
     }
 }
 
+static unsigned long loopCount = 0;
+
 void loop() {
     // Replace FlexCAN events() with manual polling
     handleIncomingMessages();
@@ -67,6 +72,8 @@ void loop() {
     delay(100);
     digitalWrite(LED_PIN, LOW);
     delay(500);
+
+    Serial.printf("Loop %lu\n", loopCount++);
 }
 
 void handleIncomingMessages() {

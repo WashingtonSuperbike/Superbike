@@ -130,6 +130,7 @@ void printMessage(CAN_message_t msg) {
 static void checkCAN(CANTaskData canData) {
   Context *context = canData.bike_context;
   if (CAN_bus.read(CAN_msg)) { // if we read non-zero # of bytes
+    Serial.printf("Received CAN Message with id %x, buffer[0] = %x\n", CAN_msg.id, CAN_msg.buf[0]);
     switch (CAN_msg.id) {
       case MOTOR_STATS_MSG:
         decodeMotorStats(CAN_msg, &(context->motor_stats));
@@ -211,6 +212,7 @@ void requestCellVoltages() {
   msg.flags.extended = 1; // set for 29-bit IDs
   msg.id = next_can_id;
   CAN_bus.write(msg);
+  Serial.println("Requested cell voltages");
 
   if (msg.id == BMSC1_LTC1_REQUEST_CELLS)
     next_can_id = BMSC1_LTC2_REQUEST_CELLS;
