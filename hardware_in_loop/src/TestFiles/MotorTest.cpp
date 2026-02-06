@@ -118,6 +118,7 @@ void sendTemps() {
   CAN_2.write(msg);
 }
  
+//MC_1.1 Identification Angle
 void sendIdentificationFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -129,6 +130,7 @@ void sendIdentificationFault() {
   Serial.println("Sent: Identification Fault");
 }
  
+//MC_1.2 Over Voltage
 void sendHighVoltageFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -140,6 +142,7 @@ void sendHighVoltageFault() {
   Serial.println("Sent: High Voltage Fault");
 }
  
+//MC_1.3 Low Voltage
 void sendLowVoltageFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -151,6 +154,7 @@ void sendLowVoltageFault() {
   Serial.println("Sent: Low Voltage Fault");
 }
  
+//MC_1.4 Stall
 void sendStallFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -162,6 +166,7 @@ void sendStallFault() {
   Serial.println("Sent: Stall Fault");
 }
  
+//MC_1.5 Internal Volts 
 void sendInternalVoltsFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -173,6 +178,7 @@ void sendInternalVoltsFault() {
   Serial.println("Sent: Internal Volts Fault");
 }
 
+//MC_1.6 Controller Over Temperature
 void sendOverTemperatureFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -184,6 +190,7 @@ void sendOverTemperatureFault() {
   Serial.println("Sent: Controller Over Temperature Fault");
 }
 
+//MC_1.7 Throttle Signal at Powerup
 void sendThrottleSignalFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -195,6 +202,7 @@ void sendThrottleSignalFault() {
   Serial.println("Sent: Throttle SignalFault");
 }
 
+//MC_1.8 Internal Reset
 void sendInternalResetFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -206,6 +214,7 @@ void sendInternalResetFault() {
   Serial.println("Sent: Internal Reset Fault");
 }
 
+//MC_1.9 Throttle Circuit
 void sendThrottleCircuitFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -217,6 +226,7 @@ void sendThrottleCircuitFault() {
   Serial.println("Sent: Throttle Circuit Fault");
 }
 
+//MC_1.10 Angle Sensor
 void sendAngleSensorFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -228,6 +238,7 @@ void sendAngleSensorFault() {
   Serial.println("Sent: Angle Sensor Fault");
 }
 
+//MC_1.11 Motor Over Temperature
 void motorOverTemperatureFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -239,6 +250,7 @@ void motorOverTemperatureFault() {
   Serial.println("Sent: Motor Over Temperature Fault");
 }
 
+//MC_1.12 Galvanometer Fault
 void sendGalvanometerFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
