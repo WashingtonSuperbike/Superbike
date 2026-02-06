@@ -116,6 +116,9 @@ void loop() {
  * 
  */
 
+// BMS_Test_1.1
+// Normal/No Faults
+// Expected output: Display normal, normal functionality. 
 void sendNormal() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -123,8 +126,8 @@ void sendNormal() {
   msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;  // no voltage faults
-  msg.buf[1] = 0;  // no thermistor faults
-  msg.buf[2] = 0;  // unused?
+  msg.buf[1] = 0;  // unused? 
+  msg.buf[2] = 0;  // No thermistor faults 
   msg.buf[3] = 0;  // unused?
 
   // Send message
@@ -140,6 +143,9 @@ void sendNormal() {
   }
 }
 
+// BMS_Test_1.2 
+// Overtemp Fault (At least 1 thermistor is over temperature threshold) 
+// Expected output: Contactor opened, warning displayed to rider. 
 void sendOvertempFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -161,6 +167,113 @@ void sendOvertempFault() {
     sendThermistorTemps(i, true);
     delay(1000);
   }
+}
+// BMS_Test_1.3 
+// HVC Fault (At least one cell voltage is > HVC) 
+// Expected output: Contactor opened, warning displayed to rider. 
+void sendHVCFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = BMS_FLAG_CELL_HVC;  // at least one cell voltage is > HVC
+  msg.buf[1] = 0;
+  msg.buf[2] = 0;
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
+}
+
+// BMS_Test_1.4 
+// LVC Fault (At least one cell voltage is < LVC) 
+// Expected output: Contactor opened, warning displayed to rider. 
+void sendLVCFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = BMS_FLAG_CELL_LVC;  // at least one cell voltage is < LVC
+  msg.buf[1] = 0;
+  msg.buf[2] = 0;
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
+}
+
+// BMS_Test_1.5 
+// BVC Fault (At least one cell voltage is > BVC)
+// Expected output: Contactor not opened, warning displayed to rider
+void sendBVCFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = BMS_FLAG_CELL_BVC;  // at least one cell voltage is > BVC
+  msg.buf[1] = 0;
+  msg.buf[2] = 0;
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
+}
+
+// BMS_ Test_1.6 
+// Thermistor Fault (Not all thermistors detected) 
+// Expected output: Contactor opened, warning displayed to rider. 
+void sendThermistorCensusFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = 0;
+  msg.buf[1] = 0;
+  msg.buf[2] = BMS_FAULT_THERM_CENSUS;  // not all thermistors present
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
+}
+
+// BMS_ Test_1.7 
+// Unlocked Fault (Configuration is not locked) 
+// Expected output: Contactor opened, warning displayed to rider. 
+void sendUnlockedFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = 0;
+  msg.buf[1] = 0;
+  msg.buf[2] = BMS_FAULT_NOT_LOCKED;  // configuration not locked
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
+}
+
+// BMS_ Test_1.8 
+// Census Fault (Not all cells present) 
+// Expected output: Contactor opened, warning displayed to rider. 
+void sendCensusFault() {
+  CAN_message_t msg;
+  msg.flags.extended = 1;
+
+  msg.id = DD_BMS_STATUS_IND;
+  msg.len = 4;
+  msg.buf[0] = 0;
+  msg.buf[1] = 0; 
+  msg.buf[2] = BMS_FAULT_CENSUS;  // not all cells present
+  msg.buf[3] = 0;
+
+  // Send message
+  CAN_2.write(msg);
 }
 
 // Send thermistor raw temps
@@ -190,93 +303,4 @@ void sendThermistorTemps(int ltcID, bool overtemp) {
   CAN_2.write(msg);
 }
 
-void sendHVCFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = BMS_FLAG_CELL_HVC;  // at least one cell voltage is > HVC
-  msg.buf[1] = 0;
-  msg.buf[2] = 0;
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
-
-void sendLVCFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = BMS_FLAG_CELL_LVC;  // at least one cell voltage is < LVC
-  msg.buf[1] = 0;
-  msg.buf[2] = 0;
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
-
-void sendBVCFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = BMS_FLAG_CELL_BVC;  // at least one cell voltage is > BVC
-  msg.buf[1] = 0;
-  msg.buf[2] = 0;
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
-
-void sendUnlockedFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = 0;
-  msg.buf[1] = 0;
-  msg.buf[2] = BMS_FAULT_NOT_LOCKED;  // configuration not locked
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
-
-void sendCensusFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = 0;
-  msg.buf[1] = 0; 
-  msg.buf[2] = BMS_FAULT_CENSUS;  // not all cells present
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
-
-void sendThermistorCensusFault() {
-  CAN_message_t msg;
-  msg.flags.extended = 1;
-
-  msg.id = DD_BMS_STATUS_IND;
-  msg.len = 4;
-  msg.buf[0] = 0;
-  msg.buf[1] = 0;
-  msg.buf[2] = BMS_FAULT_THERM_CENSUS;  // not all thermistors present
-  msg.buf[3] = 0;
-
-  // Send message
-  CAN_2.write(msg);
-}
 
