@@ -30,6 +30,13 @@ void sendHighVoltageFault();
 void sendLowVoltageFault();
 void sendStallFault();
 void sendOverTemperatureFault();
+void sendInternalVoltsFault();
+void sendThrottleSignalFault();
+void sendInternalResetFault();
+void sendThrottleCircuitFault();
+void sendAngleSensorFault();
+void sendMotorOverTemperatureFault();
+void sendGalvanometerFault();
  
 void setup() {
   Serial.begin(115200);
@@ -63,9 +70,6 @@ void setup() {
 // The loop function is required for the code to compile
 void loop() {
   CAN_2.events(); // Keeps the CAN stack processing
- 
- 
- 
   sendIdentificationFault();
   // delay(50);
   // sendStats();
@@ -83,6 +87,34 @@ void loop() {
   // sendStats();
   delay(1000);
   sendOverTemperatureFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendInternalVoltsFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendThrottleSignalFault();
+  // delay(50);
+  // sendStats(); 
+  delay(1000);
+  sendInternalResetFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendThrottleCircuitFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendAngleSensorFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendMotorOverTemperatureFault();
+  // delay(50);
+  // sendStats();
+  delay(1000);
+  sendGalvanometerFault();
   // delay(50);
   // sendStats();
   delay(1000);
