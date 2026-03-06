@@ -24,23 +24,17 @@ void initDisplay(Context *context) {
   tft.fillScreen(BACKGROUND_COLOR);
   tft.setTextColor(PRINT_COLOR);
 
-  /// Initializes all the PrintedDataStructs to set their position, values,
-  /// and point to the correct pointer corresponding to the correct data.
-  *batteryVoltage = {1, 10, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->battery_voltages.hv_series_voltage), 1, "Main Batt Voltage: "};
-  *motorControllerVoltage = {1, 10 + VERTICAL_SCALER * 1, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->motor_stats.motor_controller_battery_voltage), 1, "Main Batt Voltage (Motor Controller): "};
-  *auxBatteryVoltage = {1, 10 + 16 * 2, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->battery_voltages.aux_battery_voltage), 1, "Aux Batt Voltage: "};
-  *rpm = {1, 10 + VERTICAL_SCALER * 3, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->motor_stats.RPM), 1, "RPM: "};
-  *motorTemperature = {1, 10 + VERTICAL_SCALER * 4, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->motor_temps.motor_temperature), 1, "Motor Temp: "};
-  *motorCurr = {1, 10 + VERTICAL_SCALER * 5, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->motor_stats.motor_current), 1, "Motor Current: "};
-  *errMessage = {1, 10 + VERTICAL_SCALER * 6, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, (float*) &(context->motor_stats.error_message), 1, "Error Message: "};
-  *chargerVolt = {1, 10 + VERTICAL_SCALER * 9, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->charger_stats.output_voltage), 1, "Charger Voltage: "};
-  *chargerCurr = {1, 10 + VERTICAL_SCALER * 10, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->charger_stats.output_current), 1, "Charger Current: "};
-  *bmsStatusFlag = {1, 10 + VERTICAL_SCALER * 11, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->bms_status.bms_status_flag), 1, "BMS Status Flag: "};
-  *evccVolt = {1, 10 + VERTICAL_SCALER * 12, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->charge_controller_stats.charge_voltage), 1, "EVCC Voltage: "};
+  // Initialize one row per cell volage
+  static char cellLabels[CONFIG_DISPLAY_CELL_COUNT][12];
+  for (int i = 0; i < CONFIG_DISPLAY_CELL_COUNT; i++) {
+    sprintf(cellLabels[i], "Cell %d V: ", i + 1);
+    printedVals[i] = {1, 10 + VERTICAL_SCALER * i, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->battery_voltages.hv_cell_voltages[i]), 1, cellLabels[i]};
+  }
 
-  thermiData = {1, 10 + VERTICAL_SCALER * 7, 90, { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, context->thermistor_temps.temps, "Thermist Temp: "};
+  // Series voltage and BMS status rows below the cell rows
+  *seriesVoltage = {1, 10 + VERTICAL_SCALER * CONFIG_DISPLAY_CELL_COUNT, DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->battery_voltages.hv_series_voltage), 1, "Total Voltage: "};
+  *bmsStatusFlag = {1, 10 + VERTICAL_SCALER * (CONFIG_DISPLAY_CELL_COUNT + 1), DEFAULT_X_POS, DEFAULT_FLOAT, NUMBER, &(context->bms_status.bms_status_flag), 1, "BMS Status: "};
 
-  /// Calls on the setupMeasurementScreen() to finish up the setup.
   setupMeasurementScreen();
 }
 

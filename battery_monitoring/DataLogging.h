@@ -11,20 +11,12 @@
 #define DATALOGGING_TASK_STACK_SIZE 10000
 
 //Names for each of the log files
-/// The name for the motor temperature log.
-#define MOTOR_TEMPERATURE_LOG "motor_temperature_log.csv"
-/// The name for the motor controller temperature log
-#define MOTOR_CONTROLLER_TEMPERATURE_LOG "mc_temperature_log.csv"
-/// The name for the BMS voltage log
-#define BMS_VOLTAGE_LOG "bms_voltage_log.csv"
-/// The name for the motor controller voltage log
-#define MOTOR_CONTROLLER_VOLTAGE_LOG "mc_voltage_log.csv"
-/// The name for the motor controller current log
-#define MOTOR_CURRENT_LOG "current_log.csv"
-/// The name for the thermistor temperature log
-#define THERMISTOR_LOG "thermistor_log.csv"
-/// The name for the motor RPM log
-#define RPM_LOG "rpm_log.csv"
+/// The name for the cell voltages log
+#define CELL_VOLTAGES_LOG "cell_voltages_log.csv"
+/// The name for the series voltage log
+#define SERIES_VOLTAGE_LOG "series_voltage_log.csv"
+/// The name for the BMS status log
+#define BMS_STATUS_LOG "bms_status_log.csv"
 
 /**
  * Basic enum for data types for logging. Nothing else really.

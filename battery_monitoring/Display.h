@@ -31,8 +31,8 @@
 /// The TIRQ interrupt signal must be used for this example.
 #define TIRQ_PIN  -1
 
-/// Number of PrintedData values (length of the array that contains all the printedData)
-#define NUM_DATA 11
+/// Number of PrintedData values: CONFIG_DISPLAY_CELL_COUNT cells + series voltage + BMS status flag
+#define NUM_DATA (CONFIG_DISPLAY_CELL_COUNT + 2)
 
 // Default Values:
 /// The default starter value used for floats in the PrintedDataStruct
@@ -129,17 +129,11 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST); //the display 
 /// All PrintedValue objects/structs, just stored in the array
 PrintedData printedVals[NUM_DATA];
 
-PrintedData *batteryVoltage = &printedVals[0];
-PrintedData *motorControllerVoltage = &printedVals[1];
-PrintedData *auxBatteryVoltage = &printedVals[2];
-PrintedData *rpm = &printedVals[3];
-PrintedData *motorTemperature = &printedVals[4];
-PrintedData *motorCurr = &printedVals[5];
-PrintedData *errMessage = &printedVals[6];
-PrintedData *chargerVolt = &printedVals[7];
-PrintedData *chargerCurr = &printedVals[8];
-PrintedData *bmsStatusFlag = &printedVals[9];
-PrintedData *evccVolt = &printedVals[10];
+// Cell voltages: one entry per cell (indices 0 to CONFIG_DISPLAY_CELL_COUNT-1)
+// printedVals[CONFIG_DISPLAY_CELL_COUNT]     = series voltage
+// printedVals[CONFIG_DISPLAY_CELL_COUNT + 1] = BMS status flag
+PrintedData *seriesVoltage = &printedVals[CONFIG_DISPLAY_CELL_COUNT];
+PrintedData *bmsStatusFlag = &printedVals[CONFIG_DISPLAY_CELL_COUNT + 1];
 
 /// The thermistor data.
 PrintedDataTherm thermiData;

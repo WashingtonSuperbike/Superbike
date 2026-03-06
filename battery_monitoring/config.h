@@ -32,7 +32,10 @@
 /* We only have 20 cells but need to check all 24 LTC cell locations */
 #define CONFIG_HV_CELL_COUNT 24
 
-#define CONFIG_LOG_COUNT 7
+/* Number of cells currently being reported by BMS (start with 4 on LTC1, may increase later) */
+#define CONFIG_DISPLAY_CELL_COUNT 4
+
+#define CONFIG_LOG_COUNT 3
 
 //#define CONFIG_TEST_SCREEN_DATA 1
 

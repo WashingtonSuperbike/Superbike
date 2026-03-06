@@ -1,7 +1,7 @@
 /**
 */
 
-#include "arduino_freertos.h"
+#include <arduino_freertos.h>
 
 using namespace arduino;
 
@@ -81,13 +81,12 @@ void setup() {
 }
 
 void initializeLogStructs() {
-  context->logs[0] = {MOTOR_TEMPERATURE_LOG, 1, &(context->motor_temps.motor_temperature), FLOAT};
-  context->logs[1] = {MOTOR_CONTROLLER_TEMPERATURE_LOG, 1, &(context->motor_temps.motor_controller_temperature), FLOAT};
-  context->logs[2] = {MOTOR_CONTROLLER_VOLTAGE_LOG, 1, &(context->motor_stats.motor_controller_battery_voltage), FLOAT};
-  context->logs[3] = {MOTOR_CURRENT_LOG, 1, &(context->motor_stats.motor_current), FLOAT};
-  context->logs[4] = {RPM_LOG, 1, &(context->motor_stats.RPM), FLOAT};
-  context->logs[5] = {THERMISTOR_LOG, 10, context->thermistor_temps.temps, FLOAT};
-  context->logs[6] = {BMS_VOLTAGE_LOG, 1, &(context->battery_voltages.hv_series_voltage), FLOAT};
+  // Log all cell voltages in one file (CONFIG_DISPLAY_CELL_COUNT values per record)
+  context->logs[0] = {CELL_VOLTAGES_LOG, CONFIG_DISPLAY_CELL_COUNT, context->battery_voltages.hv_cell_voltages, FLOAT};
+  // Log total series voltage
+  context->logs[1] = {SERIES_VOLTAGE_LOG, 1, &(context->battery_voltages.hv_series_voltage), FLOAT};
+  // Log BMS status flag
+  context->logs[2] = {BMS_STATUS_LOG, 1, &(context->bms_status.bms_status_flag), FLOAT};
 }
 
 time_t getTeensy3Time()

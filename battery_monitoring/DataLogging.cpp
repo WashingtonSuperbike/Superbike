@@ -39,11 +39,8 @@ void dataLoggingTask(void *dlData) {
         Serial.println("saved");
         last_save = now;
       }
-        // delay 50ms (change to modify how fast records are saved
-      // in the future, this 'writeRate' could be specific to each data log
-      // ex: motor current should write every 5ms but battery voltage only every 1 second
-      // as battery voltage doesn't change very fast but current can
-      vTaskDelay((50 * configTICK_RATE_HZ) / 1000);
+        // delay 1 second between each record
+      vTaskDelay((1000 * configTICK_RATE_HZ) / 1000);
     } else {
       Serial.println("SD card missing");
       // only print every 10 seconds, or until sd_card is fixed (not done currently)
