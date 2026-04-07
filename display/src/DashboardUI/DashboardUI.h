@@ -109,16 +109,12 @@ struct DashboardState {
  * be updated later without recreating them each frame.
  */
 struct DashboardWidgets {
-    // Speed
-    lv_obj_t *speed_label;
-    lv_obj_t *mph_label;
-
-    // RPM arc (centre)
-    lv_obj_t *rpm_arc;
-    lv_obj_t *rpm_value_label;
-
-    // Power bar (positive + regen)
-    lv_obj_t *power_bar;
+    // Speedometer meter
+    lv_obj_t              *meter;
+    lv_obj_t              *meter_speed_label;
+    lv_meter_indicator_t  *speed_indic;
+    lv_meter_indicator_t  *current_motoring_indic;
+    lv_meter_indicator_t  *current_regen_indic;
 
     // Temperature arcs (right column)
     lv_obj_t *batt_temp_arc;
