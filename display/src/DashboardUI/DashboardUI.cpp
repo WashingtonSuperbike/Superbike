@@ -1,22 +1,10 @@
 /**
  * DashboardUI.cpp - LVGL dashboard for 800x480 (Waveshare ESP32-S3-Touch-LCD-5)
- *
- * Layout modelled after NewUI.cpp (320x240 TFT mockup) but expanded for the
- * larger screen and using native LVGL widgets (arcs, bars, labels).
- *
- * ┌─────────────────────────────────────────────────────────┐
- * │  SPEED (big)   │   RPM arc + value   │  temp arcs col   │
- * │  mph           │                     │  BATT / MOTOR/MC │
- * │                │                     │  GYRO arc        │
- * ├─────────────────────────────────────────────────────────┤
- * │  power bar (full width, positive + regen)               │
- * ├─────────────────────────────────────────────────────────┤
- * │  stopwatch  │ icons │ logo │ error │ batt V / %  │ batt │
- * └─────────────────────────────────────────────────────────┘
  */
 
 #include "DashboardUI.h"
 #include "../lvgl_config/lvgl_v8_port.h"
+LV_FONT_DECLARE(lv_font_montserrat_144);
 #include <cstdio>
 #include <cmath>
 
@@ -118,7 +106,7 @@ static void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,
     lv_label_set_text(title_lbl, title);
     lv_obj_set_style_text_color(title_lbl, CLR_FG, 0);
     lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align_to(title_lbl, *arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    lv_obj_align_to(title_lbl, *arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 1);
 }
 
 // ============================================================================
@@ -134,8 +122,7 @@ void dashboard_create(void)
     w.speed_label = lv_label_create(scr);
     lv_label_set_text(w.speed_label, "0");
     lv_obj_set_style_text_color(w.speed_label, CLR_SPEED, 0);
-    lv_obj_set_style_text_font(w.speed_label, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_transform_zoom(w.speed_label, 512, 0); // 2x zoom
+    lv_obj_set_style_text_font(w.speed_label, &lv_font_montserrat_144, 0);
     lv_obj_set_pos(w.speed_label, 40, 60);
 
     w.mph_label = lv_label_create(scr);
@@ -171,21 +158,21 @@ void dashboard_create(void)
     lv_obj_align(rpm_title, LV_ALIGN_CENTER, 0, 30);
 
     // -- TEMPERATURE ARCS (right column) --
-    const lv_coord_t arc_x = 570;
+    const lv_coord_t arc_x = 530;
     create_temp_arc(scr, &w.batt_temp_arc, &w.batt_temp_label,
                     "BATT", CLR_BATT_TEMP,
                     BATT_TEMP_MIN, BATT_TEMP_MAX,
-                    arc_x, 5);
+                    arc_x, 10);
 
     create_temp_arc(scr, &w.motor_temp_arc, &w.motor_temp_label,
                     "MOTOR", CLR_MOTOR_TEMP,
                     MOTOR_TEMP_MIN, MOTOR_TEMP_MAX,
-                    arc_x + 120, 5);
+                    arc_x + 130, 10);
 
     create_temp_arc(scr, &w.mc_temp_arc, &w.mc_temp_label,
                     "MTR CTRL", CLR_MC_TEMP,
                     MC_TEMP_MIN, MC_TEMP_MAX,
-                    arc_x, 140);
+                    arc_x, 160);
 
     // -- GYRO ARC --
     w.gyro_arc = lv_arc_create(scr);
@@ -199,7 +186,7 @@ void dashboard_create(void)
     lv_obj_set_style_arc_width(w.gyro_arc, 10, LV_PART_INDICATOR);
     lv_obj_remove_style(w.gyro_arc, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(w.gyro_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(w.gyro_arc, arc_x + 120, 140);
+    lv_obj_set_pos(w.gyro_arc, arc_x + 130, 160);
 
     w.gyro_label = lv_label_create(w.gyro_arc);
     lv_label_set_text(w.gyro_label, "0");
@@ -211,7 +198,7 @@ void dashboard_create(void)
     lv_label_set_text(gyro_title, "GYRO");
     lv_obj_set_style_text_color(gyro_title, CLR_FG, 0);
     lv_obj_set_style_text_font(gyro_title, &lv_font_montserrat_12, 0);
-    lv_obj_align_to(gyro_title, w.gyro_arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    lv_obj_align_to(gyro_title, w.gyro_arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 1);
 
     // -- POWER BAR (full-width, below gauges) --
     w.power_bar = lv_bar_create(scr);

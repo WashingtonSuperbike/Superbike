@@ -124,15 +124,15 @@ void setup()
     );
 
     // Simulation task: animates gauge values (disabled — real CAN data is used)
-    // xTaskCreatePinnedToCore(
-    //     simulationTask,
-    //     "dash_sim",
-    //     4096,
-    //     NULL,
-    //     1,
-    //     NULL,
-    //     0
-    // );
+    xTaskCreatePinnedToCore(
+        simulationTask,
+        "dash_sim",
+        4096,
+        NULL,
+        1,
+        NULL,
+        0
+    );
 
     xTaskCreatePinnedToCore(
         [](void *param) {
