@@ -4,15 +4,15 @@
  * Layout modelled after NewUI.cpp (320x240 TFT mockup) but expanded for the
  * larger screen and using native LVGL widgets (arcs, bars, labels).
  *
- * ┌──────────────────────────────────────────────────────────┐
+ * ┌─────────────────────────────────────────────────────────┐
  * │  SPEED (big)   │   RPM arc + value   │  temp arcs col   │
  * │  mph           │                     │  BATT / MOTOR/MC │
  * │                │                     │  GYRO arc        │
- * ├──────────────────────────────────────────────────────────┤
- * │  power bar (full width, positive + regen)                │
- * ├──────────────────────────────────────────────────────────┤
+ * ├─────────────────────────────────────────────────────────┤
+ * │  power bar (full width, positive + regen)               │
+ * ├─────────────────────────────────────────────────────────┤
  * │  stopwatch  │ icons │ logo │ error │ batt V / %  │ batt │
- * └──────────────────────────────────────────────────────────┘
+ * └─────────────────────────────────────────────────────────┘
  */
 
 #include "DashboardUI.h"

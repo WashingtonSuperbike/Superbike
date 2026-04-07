@@ -5,6 +5,9 @@
 
 #include <Arduino.h>
 #include "driver/twai.h"
+#include "Constants.h"
+#include "Config.h"
+#include "DashboardUI/DashboardUI.h"
 
 // Pins used to connect to CAN bus transceiver:
 #define RX_PIN 16
@@ -14,6 +17,6 @@
 #define POLLING_RATE_MS 1000
 
 bool waveshare_twai_init();
-void waveshare_twai_receive();
+void waveshare_twai_receive(DashboardState *state);
 
 #endif

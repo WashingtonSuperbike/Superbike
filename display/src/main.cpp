@@ -14,7 +14,7 @@
 #include <lvgl.h>
 #include "lvgl_config/lvgl_v8_port.h"
 #include "DashboardUI/DashboardUI.h"
-#include "CAN/waveshare_twai_port.h"
+#include "CAN/CAN_Receive.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -123,28 +123,27 @@ void setup()
         1
     );
 
-    // Simulation task: animates gauge values
-    xTaskCreatePinnedToCore(
-        simulationTask,
-        "dash_sim",
-        4096,
-        NULL,
-        1,
-        NULL,
-        0
-    );
+    // Simulation task: animates gauge values (disabled — real CAN data is used)
+    // xTaskCreatePinnedToCore(
+    //     simulationTask,
+    //     "dash_sim",
+    //     4096,
+    //     NULL,
+    //     1,
+    //     NULL,
+    //     0
+    // );
 
     xTaskCreatePinnedToCore(
         [](void *param) {
-            (void)param;
+            DashboardState *state = (DashboardState *)param;
             while (true) {
-                waveshare_twai_receive();
-                // vTaskDelay(pdMS_TO_TICKS(25));
+                waveshare_twai_receive(state);
             }
         },
         "twai_recv",
         4096,
-        NULL,
+        &dashState,
         1,
         NULL,
         0

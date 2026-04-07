@@ -20,7 +20,7 @@ static twai_message_t message;
     // Initialize configuration structures using macro initializers
     // TODO: Maybe adjust and utilize specific timing and filter configurations
     twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(CAN_TX_PIN, CAN_RX_PIN, TWAI_MODE_NORMAL);
-    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
+    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_250KBITS();
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
     //Set up TWAI driver (CAN for ESP32-S3)
