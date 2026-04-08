@@ -39,6 +39,7 @@
 #define CLR_LOGO        lv_color_make(0x61, 0xD6, 0x61)
 #define CLR_MOTORING    lv_color_make(0x00, 0x80, 0xFF)  // blue (motoring / positive current)
 #define CLR_REGEN       lv_color_make(0x00, 0xC8, 0x00)  // green (regen / negative current)
+#define CLR_NEEDLE      lv_color_make(0xFF, 0x20, 0x00)  // red needle
 
 // ============================================================================
 // STATIC WIDGET STATE
@@ -133,16 +134,20 @@ void dashboard_create(void)
 
     // -- SPEEDOMETER METER (centre-left) --
     w.meter = lv_meter_create(scr);
-    lv_obj_set_size(w.meter, 400, 400);
-    lv_obj_set_pos(w.meter, 50, 30);
+    lv_obj_set_size(w.meter, 430, 430);
+    lv_obj_set_pos(w.meter, 35, 25);
     lv_obj_set_style_bg_opa(w.meter, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(w.meter, 0, 0);
     lv_obj_remove_style(w.meter, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(w.meter, LV_OBJ_FLAG_CLICKABLE);
 
-    // --- Inner speed scale (0-140 mph) ---
+    // Tick label style: larger white font
+    lv_obj_set_style_text_font(w.meter, &lv_font_montserrat_20, LV_PART_TICKS);
+    lv_obj_set_style_text_color(w.meter, CLR_FG, LV_PART_TICKS);
+
+    // --- Inner speed scale (0-140 mph, 210 degree sweep) ---
     lv_meter_scale_t *speed_scale = lv_meter_add_scale(w.meter);
-    lv_meter_set_scale_range(w.meter, speed_scale, 0, 140, 270, 135);
+    lv_meter_set_scale_range(w.meter, speed_scale, 0, 140, 210, 165);
 
     // Minor ticks: every 5 mph -> (140/5)+1 = 29 tick positions
     lv_meter_set_scale_ticks(w.meter, speed_scale,
@@ -157,17 +162,18 @@ void dashboard_create(void)
         3,           // width (px)
         18,          // length (px)
         CLR_FG,      // white major tick + label color
-        8);          // label_gap (px)
+        20);         // label_gap: larger to push labels inward, avoid tick overlap
 
-    // Speed needle indicator
+    // Speed needle: red, shortened to stay clear of ticks
     w.speed_indic = lv_meter_add_needle_line(w.meter, speed_scale,
         4,           // width (px)
-        CLR_FG,      // white
-        -10);        // r_mod: shorten from outer edge
+        CLR_NEEDLE,  // red
+        -40);        // r_mod: stop 40px from outer edge, well before 18px ticks
 
-    // --- Outer current scale (0-500A) ---
+    // --- Outer current scale (-500 to +500 A, same sweep as speed) ---
+    // 0A sits at the bottom center; motoring arcs clockwise, regen counter-clockwise
     lv_meter_scale_t *current_scale = lv_meter_add_scale(w.meter);
-    lv_meter_set_scale_range(w.meter, current_scale, 0, 500, 270, 135);
+    lv_meter_set_scale_range(w.meter, current_scale, -500, 500, 210, 165);
 
     // Suppress ticks on current scale: use 2 ticks (minimum safe) with zero dimensions
     // cnt=1 causes divide-by-zero in LVGL: angle_range / (tick_cnt - 1) = 270/0
@@ -357,8 +363,8 @@ void dashboard_refresh(const DashboardState &state)
         w.current_motoring_indic->opa = LV_OPA_COVER;
         w.current_regen_indic->opa    = LV_OPA_TRANSP;
     } else if (current < 0.0f) {
-        lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, 0);
-        lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, (int32_t)abs_current);
+        lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, -(int32_t)abs_current);
+        lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
         w.current_regen_indic->opa    = LV_OPA_COVER;
         w.current_motoring_indic->opa = LV_OPA_TRANSP;
     } else {
