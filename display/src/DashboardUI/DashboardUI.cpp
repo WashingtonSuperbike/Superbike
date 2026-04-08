@@ -170,29 +170,30 @@ void dashboard_create(void)
         CLR_NEEDLE,  // red
         -40);        // r_mod: stop 40px from outer edge, well before 18px ticks
 
-    // --- Outer current scale (-500 to +500 A, same sweep as speed) ---
-    // 0A sits at the bottom center; motoring arcs clockwise, regen counter-clockwise
+    // --- Outer current scale (-500 to +500 A) ---
+    // rotation=60 places 0A at 60 + (500/1000)*210 = 165deg, aligned with 0 mph.
+    // Motoring (0 to +500) arcs clockwise from 0 mph; regen (-500 to 0) arcs counter-clockwise.
     lv_meter_scale_t *current_scale = lv_meter_add_scale(w.meter);
-    lv_meter_set_scale_range(w.meter, current_scale, -500, 500, 210, 165);
+    lv_meter_set_scale_range(w.meter, current_scale, -500, 500, 210, 60);
 
     // Suppress ticks on current scale: use 2 ticks (minimum safe) with zero dimensions
-    // cnt=1 causes divide-by-zero in LVGL: angle_range / (tick_cnt - 1) = 270/0
+    // cnt=1 causes divide-by-zero in LVGL: angle_range / (tick_cnt - 1)
     lv_meter_set_scale_ticks(w.meter, current_scale, 2, 0, 0, lv_color_black());
 
-    // Motoring arc (blue), hidden initially
+    // Motoring arc (blue), outside the tick marks (positive r_mod), hidden initially
     w.current_motoring_indic = lv_meter_add_arc(w.meter, current_scale,
-        16,              // arc width (px)
+        12,              // arc width (px)
         CLR_MOTORING,    // blue
-        0);              // r_mod: outer edge
+        10);             // r_mod: +10 places arc outside the tick ring
     lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
     lv_meter_set_indicator_end_value(w.meter, w.current_motoring_indic, 0);
     w.current_motoring_indic->opa = LV_OPA_TRANSP;
 
-    // Regen arc (green), hidden initially
+    // Regen arc (green), outside the tick marks, hidden initially
     w.current_regen_indic = lv_meter_add_arc(w.meter, current_scale,
-        16,              // arc width (px)
+        12,              // arc width (px)
         CLR_REGEN,       // green
-        0);              // r_mod: outer edge
+        10);             // r_mod: +10 outside the tick ring
     lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, 0);
     lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
     w.current_regen_indic->opa = LV_OPA_TRANSP;
