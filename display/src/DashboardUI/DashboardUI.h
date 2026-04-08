@@ -112,9 +112,12 @@ struct DashboardWidgets {
     // Speedometer meter
     lv_obj_t              *meter;
     lv_obj_t              *meter_speed_label;
-    lv_meter_indicator_t  *speed_indic;
     lv_meter_indicator_t  *current_motoring_indic;
     lv_meter_indicator_t  *current_regen_indic;
+
+    // Needle as a standalone lv_line (avoids full-meter redraw on every update)
+    lv_obj_t              *needle_line;
+    lv_point_t             needle_pts[2];  // must persist — LVGL holds pointer
 
     // Temperature arcs (right column)
     lv_obj_t *batt_temp_arc;

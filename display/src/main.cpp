@@ -139,6 +139,7 @@ void setup()
             DashboardState *state = (DashboardState *)param;
             while (true) {
                 waveshare_twai_receive(state);
+                vTaskDelay(pdMS_TO_TICKS(10));
             }
         },
         "twai_recv",

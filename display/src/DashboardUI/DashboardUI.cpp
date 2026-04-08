@@ -36,7 +36,7 @@
 #define CLR_GYRO        lv_color_make(0xBD, 0xBD, 0xBD)  // ~0xBDF7 grey
 #define CLR_WARN_RED    lv_color_make(0xF8, 0x20, 0x00)
 #define CLR_WARN_YELLOW lv_color_make(0xFE, 0xE0, 0x00)
-#define CLR_LOGO        lv_color_make(0x61, 0xD6, 0x61)
+#define CLR_LOGO        lv_color_make(0x4B, 0x2C, 0x92)  // purple
 #define CLR_MOTORING    lv_color_make(0x00, 0x80, 0xFF)  // blue (motoring / positive current)
 #define CLR_REGEN       lv_color_make(0x00, 0xC8, 0x00)  // green (regen / negative current)
 #define CLR_NEEDLE      lv_color_make(0xFF, 0x20, 0x00)  // red needle
@@ -49,6 +49,8 @@ static DashboardWidgets w;
 
 // Previous values for dirty-checking (only redraw when changed)
 static int prev_speed = -1;
+static int32_t prev_current_value = 0;   // absolute amps, clamped to 500
+static int     prev_current_dir   = 0;   // -1 regen, 0 idle, +1 motoring
 
 // ============================================================================
 // PLACEHOLDER IMAGES
@@ -70,6 +72,9 @@ static int prev_speed = -1;
  * Until real assets are ready, we use LVGL's built-in symbol font as
  * placeholder text in labels styled to look like icons.
  */
+
+// Include the large font for digital speed readout
+LV_FONT_DECLARE(lv_font_montserrat_144);
 
 // ============================================================================
 // HELPER: create a small "icon" label using LV_SYMBOL_* placeholder text
@@ -120,7 +125,7 @@ static void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,
     lv_label_set_text(title_lbl, title);
     lv_obj_set_style_text_color(title_lbl, CLR_FG, 0);
     lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align_to(title_lbl, *arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    lv_obj_align_to(title_lbl, *arc, LV_ALIGN_BOTTOM_MID, 0, 5);
 }
 
 // ============================================================================
@@ -135,7 +140,7 @@ void dashboard_create(void)
     // -- SPEEDOMETER METER (centre-left) --
     w.meter = lv_meter_create(scr);
     lv_obj_set_size(w.meter, 430, 430);
-    lv_obj_set_pos(w.meter, 35, 25);
+    lv_obj_set_pos(w.meter, 35, 15);
     lv_obj_set_style_bg_opa(w.meter, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(w.meter, 0, 0);
     lv_obj_remove_style(w.meter, NULL, LV_PART_KNOB);
@@ -149,26 +154,35 @@ void dashboard_create(void)
     lv_meter_scale_t *speed_scale = lv_meter_add_scale(w.meter);
     lv_meter_set_scale_range(w.meter, speed_scale, 0, 140, 210, 165);
 
-    // Minor ticks: every 5 mph -> (140/5)+1 = 29 tick positions
+    // Minor ticks: every 1 mph
     lv_meter_set_scale_ticks(w.meter, speed_scale,
-        29,          // tick_cnt: 0,5,10,...,140
+        141,         // tick_cnt
         2,           // width (px)
         10,          // length (px)
         lv_color_make(0x80, 0x80, 0x80));  // grey minor tick color
 
-    // Major ticks: every 2nd minor tick = every 10 mph
+    // Major ticks: every 10th minor tick = every 10 mph
     lv_meter_set_scale_major_ticks(w.meter, speed_scale,
-        2,           // nth: every 2nd tick is major
+        10,           // nth: every 10th tick is major
         3,           // width (px)
         18,          // length (px)
         CLR_FG,      // white major tick + label color
-        20);         // label_gap: larger to push labels inward, avoid tick overlap
+        16);         // label_gap: larger to push labels inward, avoid tick overlap
 
-    // Speed needle: red, shortened to stay clear of ticks
-    w.speed_indic = lv_meter_add_needle_line(w.meter, speed_scale,
-        4,           // width (px)
-        CLR_NEEDLE,  // red
-        -40);        // r_mod: stop 40px from outer edge, well before 18px ticks
+    // Speed needle: standalone lv_line so only its narrow strip is redrawn each frame.
+    // lv_meter_add_needle_line() would invalidate the full 430x430 meter bounding box
+    // on every value change; an external lv_line only invalidates its own thin strip.
+    w.needle_line = lv_line_create(lv_scr_act());
+    lv_obj_set_style_line_width(w.needle_line, 5, 0);
+    lv_obj_set_style_line_color(w.needle_line, CLR_NEEDLE, 0);
+    lv_obj_set_style_line_rounded(w.needle_line, true, 0);
+    // Initialise at 0 mph (angle=165°, pointing lower-right from meter centre)
+    // Meter centre on screen: (35+215, 15+215) = (250, 230); needle length = radius(215) - 50 = 165px
+    // LVGL angle convention: 0°=12-o'clock, clockwise. x=sin(θ), y=-cos(θ)
+    w.needle_pts[0] = {250, 230};
+    w.needle_pts[1] = {250 + (lv_coord_t)(165.0f * sinf(255.0f * M_PI / 180.0f)),
+                       230 - (lv_coord_t)(165.0f * cosf(255.0f * M_PI / 180.0f))};
+    lv_line_set_points(w.needle_line, w.needle_pts, 2);
 
     // --- Outer current scale (-500 to +500 A) ---
     // rotation=60 places 0A at 60 + (500/1000)*210 = 165deg, aligned with 0 mph.
@@ -182,7 +196,7 @@ void dashboard_create(void)
 
     // Motoring arc (blue), outside the tick marks (positive r_mod), hidden initially
     w.current_motoring_indic = lv_meter_add_arc(w.meter, current_scale,
-        12,              // arc width (px)
+        10,              // arc width (px)
         CLR_MOTORING,    // blue
         10);             // r_mod: +10 places arc outside the tick ring
     lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
@@ -191,7 +205,7 @@ void dashboard_create(void)
 
     // Regen arc (green), outside the tick marks, hidden initially
     w.current_regen_indic = lv_meter_add_arc(w.meter, current_scale,
-        12,              // arc width (px)
+        10,              // arc width (px)
         CLR_REGEN,       // green
         10);             // r_mod: +10 outside the tick ring
     lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, 0);
@@ -202,8 +216,8 @@ void dashboard_create(void)
     w.meter_speed_label = lv_label_create(w.meter);
     lv_label_set_text(w.meter_speed_label, "0");
     lv_obj_set_style_text_color(w.meter_speed_label, CLR_FG, 0);
-    lv_obj_set_style_text_font(w.meter_speed_label, &lv_font_montserrat_30, 0);
-    lv_obj_align(w.meter_speed_label, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_set_style_text_font(w.meter_speed_label, &lv_font_montserrat_144, 0);
+    lv_obj_align(w.meter_speed_label, LV_ALIGN_BOTTOM_MID, 0, -50);
 
     // -- TEMPERATURE ARCS (right column) --
     const lv_coord_t arc_x = 570;
@@ -246,16 +260,16 @@ void dashboard_create(void)
     lv_label_set_text(gyro_title, "GYRO");
     lv_obj_set_style_text_color(gyro_title, CLR_FG, 0);
     lv_obj_set_style_text_font(gyro_title, &lv_font_montserrat_12, 0);
-    lv_obj_align_to(gyro_title, w.gyro_arc, LV_ALIGN_OUT_BOTTOM_MID, 0, 2);
+    lv_obj_align_to(gyro_title, w.gyro_arc, LV_ALIGN_BOTTOM_MID, 0, 5);
 
     // -- BOTTOM STRIP --
 
     // Stopwatch (bottom-left)
-    w.stopwatch_label = lv_label_create(scr);
-    lv_label_set_text(w.stopwatch_label, "00:00.00");
-    lv_obj_set_style_text_color(w.stopwatch_label, CLR_FG, 0);
-    lv_obj_set_style_text_font(w.stopwatch_label, &lv_font_montserrat_30, 0);
-    lv_obj_set_pos(w.stopwatch_label, 15, 410);
+    // w.stopwatch_label = lv_label_create(scr);
+    // lv_label_set_text(w.stopwatch_label, "00:00.00");
+    // lv_obj_set_style_text_color(w.stopwatch_label, CLR_FG, 0);
+    // lv_obj_set_style_text_font(w.stopwatch_label, &lv_font_montserrat_30, 0);
+    // lv_obj_set_pos(w.stopwatch_label, 15, 410);
 
     // Status icons row
     lv_coord_t icon_y = 445;
@@ -267,7 +281,7 @@ void dashboard_create(void)
 
     // Logo placeholder (centre-bottom)
     w.logo_icon = lv_label_create(scr);
-    lv_label_set_text(w.logo_icon, "SB");
+    lv_label_set_text(w.logo_icon, "UW");
     lv_obj_set_style_text_color(w.logo_icon, CLR_LOGO, 0);
     lv_obj_set_style_text_font(w.logo_icon, &lv_font_montserrat_24, 0);
     lv_obj_set_pos(w.logo_icon, 380, 440);
@@ -277,14 +291,14 @@ void dashboard_create(void)
     lv_label_set_text(w.error_label, "");
     lv_obj_set_style_text_color(w.error_label, CLR_WARN_RED, 0);
     lv_obj_set_style_text_font(w.error_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(w.error_label, 430, 410);
+    lv_obj_set_pos(w.error_label, 450, 410);
 
     // BMS status
     w.bms_status_label = lv_label_create(scr);
     lv_label_set_text(w.bms_status_label, "BMS: OK");
     lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
     lv_obj_set_style_text_font(w.bms_status_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(w.bms_status_label, 430, 435);
+    lv_obj_set_pos(w.bms_status_label, 450, 435);
 
     // Battery voltage + percentage (bottom-right)
     w.batt_voltage_label = lv_label_create(scr);
@@ -300,8 +314,7 @@ void dashboard_create(void)
     lv_obj_set_pos(w.batt_percent_label, 650, 445);
 
     // Battery icon placeholder
-    w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL,
-                                    CLR_WARN_RED, 740, 425);
+    w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL, CLR_WARN_RED, 740, 425);
 }
 
 // ============================================================================
@@ -320,7 +333,13 @@ void dashboard_refresh(const DashboardState &state)
     // -- Speed (needle + digital label) --
     int speed = rpm_to_mph(state.motor.RPM);
     if (speed != prev_speed) {
-        lv_meter_set_indicator_value(w.meter, w.speed_indic, speed);
+        // Update the standalone needle line — only its narrow strip is redrawn
+        float angle_deg = 255.0f + (float)speed * (210.0f / 140.0f);
+        float angle_rad = angle_deg * (float)M_PI / 180.0f;
+        w.needle_pts[0] = {250, 230};
+        w.needle_pts[1] = {250 + (lv_coord_t)(165.0f * sinf(angle_rad)),
+                           230 - (lv_coord_t)(165.0f * cosf(angle_rad))};
+        lv_line_set_points(w.needle_line, w.needle_pts, 2);
         snprintf(buf, sizeof(buf), "%d", speed);
         lv_label_set_text(w.meter_speed_label, buf);
         prev_speed = speed;
@@ -358,21 +377,27 @@ void dashboard_refresh(const DashboardState &state)
     float abs_current = fabsf(current);
     if (abs_current > 500.0f) abs_current = 500.0f;
 
-    if (current > 0.0f) {
-        lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
-        lv_meter_set_indicator_end_value(w.meter, w.current_motoring_indic, (int32_t)abs_current);
-        w.current_motoring_indic->opa = LV_OPA_COVER;
-        w.current_regen_indic->opa    = LV_OPA_TRANSP;
-    } else if (current < 0.0f) {
-        lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, -(int32_t)abs_current);
-        lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
-        w.current_regen_indic->opa    = LV_OPA_COVER;
-        w.current_motoring_indic->opa = LV_OPA_TRANSP;
-    } else {
-        w.current_motoring_indic->opa = LV_OPA_TRANSP;
-        w.current_regen_indic->opa    = LV_OPA_TRANSP;
+    int cur_dir = (current > 0.0f) ? 1 : (current < 0.0f) ? -1 : 0;
+    int32_t cur_val = (int32_t)abs_current;
+    if (cur_dir != prev_current_dir || cur_val != prev_current_value) {
+        if (cur_dir > 0) {
+            lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
+            lv_meter_set_indicator_end_value(w.meter, w.current_motoring_indic, cur_val);
+            w.current_motoring_indic->opa = LV_OPA_COVER;
+            w.current_regen_indic->opa    = LV_OPA_TRANSP;
+        } else if (cur_dir < 0) {
+            lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, -cur_val);
+            lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
+            w.current_regen_indic->opa    = LV_OPA_COVER;
+            w.current_motoring_indic->opa = LV_OPA_TRANSP;
+        } else {
+            w.current_motoring_indic->opa = LV_OPA_TRANSP;
+            w.current_regen_indic->opa    = LV_OPA_TRANSP;
+        }
+        lv_obj_invalidate(w.meter);
+        prev_current_dir   = cur_dir;
+        prev_current_value = cur_val;
     }
-    lv_obj_invalidate(w.meter);
 
     // -- Battery voltage (sum of HV cells) --
     snprintf(buf, sizeof(buf), "%.1f V", state.battery.hv_series_voltage);

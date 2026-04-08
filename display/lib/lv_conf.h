@@ -32,7 +32,7 @@
 /*Enable features to draw on transparent background.
  *It's required if opa, and transform_* style properties are used.
  *Can be also used if the UI is above another layer, e.g. an OSD menu or video player.*/
-#define LV_COLOR_SCREEN_TRANSP 1
+#define LV_COLOR_SCREEN_TRANSP 0
 
 /* Adjust color mix functions rounding. GPUs might calculate color mix (blending) differently.
  * 0: round down, 64: round up from x.75, 128: round up from half, 192: round up from x.25, 254: round up */
@@ -71,14 +71,14 @@
 #define LV_MEM_BUF_MAX_NUM 16
 
 /*Use the standard `memcpy` and `memset` instead of LVGL's own functions. (Might or might not be faster).*/
-#define LV_MEMCPY_MEMSET_STD 0
+#define LV_MEMCPY_MEMSET_STD 1
 
 /*====================
    HAL SETTINGS
  *====================*/
 
 /*Default display refresh period. LVG will redraw changed areas with this period time*/
-#define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
+#define LV_DISP_DEF_REFR_PERIOD 10      /*[ms]*/
 
 /*Input device read period in milliseconds*/
 #define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
@@ -120,7 +120,7 @@
     * The circumference of 1/4 circle are saved for anti-aliasing
     * radius * 4 bytes are used per circle (the most often used radiuses are saved)
     * 0: to disable caching */
-    #define LV_CIRCLE_CACHE_SIZE 4
+    #define LV_CIRCLE_CACHE_SIZE 16
 #endif /*LV_DRAW_COMPLEX*/
 
 /**
