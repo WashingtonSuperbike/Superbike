@@ -169,8 +169,9 @@ void dashboard_create(void)
     lv_meter_scale_t *current_scale = lv_meter_add_scale(w.meter);
     lv_meter_set_scale_range(w.meter, current_scale, 0, 500, 270, 135);
 
-    // Suppress ticks on current scale: 1 tick with zero dimensions
-    lv_meter_set_scale_ticks(w.meter, current_scale, 1, 0, 0, lv_color_black());
+    // Suppress ticks on current scale: use 2 ticks (minimum safe) with zero dimensions
+    // cnt=1 causes divide-by-zero in LVGL: angle_range / (tick_cnt - 1) = 270/0
+    lv_meter_set_scale_ticks(w.meter, current_scale, 2, 0, 0, lv_color_black());
 
     // Motoring arc (blue), hidden initially
     w.current_motoring_indic = lv_meter_add_arc(w.meter, current_scale,
