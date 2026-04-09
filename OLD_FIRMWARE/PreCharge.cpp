@@ -6,28 +6,6 @@
 #include <Wire.h>
 #include "GPIO.h"
 
-// I2C is incredibly unstable? Or perhaps not using proper wiring causes this,
-// but the reading in precharge data can often bug out and output
-// "nan" because of randomness? I would personally recommend
-// having some sort of true or false based
-// indicator at the bottom right of the speedometer screen
-// that outputs "true" or something to indicate
-// that the gyro is not bugging out. Or perhaps
-// output the gyro data on the bottom right
-// to indicate danger? Something like that.
-
-// OKAY, MAKE SURE YOU READ THIS IF YOU SEE ISSUES WITH THE GYRO.
-// By my *limited* understanding, I think the problem is that
-// the gyro needs to be consistently powered, hence why proper
-// gyro setup code has a significant delay between
-// turning the thing on and actually reading data from it.
-// An easy way to work around it, is to power on the Teensy
-// and then once everything is up and running,
-// reprogram it by using the button on the board.
-// In the case of the actual race, I would turn on low-voltage
-// and then wait a second and then turn it off and then
-// turn it back on.
-
 /* Current HV state */
 static HV_STATE hv_state = HV_OFF;
 
@@ -51,25 +29,42 @@ bool isPrecharged(PreChargeTaskData preChargeData) {
           && battery_voltages.hv_series_voltage > 80;
 }
 
-// this function returns true if there are no HV errors detected on the bike
+// Returns true if HV System is safe, false otherwise.
+// Validated 04/08/2026 during Hardware In Loop (HIL) Testing.
+// Any changes to below method require repeat of testing procedure.
 bool isHVSafe(PreChargeTaskData preChargeData) {
-  //BMSStatus bmsStatus = preChargeData.bmsStatus;
-  MotorTemps motor_temps = preChargeData.context->motor_temps;
+  if (preChargeData.context->bms_status.bms_c_fault == 0x02 ||
+          preChargeData.context->bms_status.bms_c_fault == 0x04) {
+    // BMS-1.2: Thermistor overtemp
+    // BMS-1.8: Cell census fault (cell(s) not detected)
+    return 0;
+  }
+  
+  if (preChargeData.context->bms_status.bms_status_flag == 0x01 ||
+          preChargeData.context->bms_status.bms_status_flag == 0x02) {
+    // BMS-1.3: High Voltage Cutoff reached
+    // BMS-1.4: Low Voltage Cutoff reached
+    return 0;
+  }
 
-  /* !!!! these are commented out now but all of this should be checked when using the real bike !!!!
-    though you will have to determine which of these are emergency HV states. i.e. Which ones should turn off the contactor instantly
-    and which ones should you simply alert the rider?
-    As of now, they all immediately turn off the contactor which may be dangerous for the rider
-  */
+  
+  if (preChargeData.context->bms_status.ltc_fault != 0) {
+    // BMS-1.9: LTC Fault detected
+    return 0;
+  }
 
-  //if (*bmsStatus.ltc_fault == 1) return 0;
-  //if (*bmsStatus.ltc_count != NUMBER_OF_LTCS) return 0;
-  //    the below if can be reduced to if (*bmsStatus.bms_c_fault) which returns true for any non-zero bms_c_fault value
-  //if (*bmsStatus.bms_c_fault == 1 || *bmsStatus.bms_c_fault == 2 || *bmsStatus.bms_c_fault == 4 ||    //checks BMS fault error codes
-  //    *bmsStatus.bms_c_fault == 8) return 0;
-  //if (*bmsStatus.bms_status_flag == 1 || *bmsStatus.bms_status_flag == 2) return 0;  //check if cells are above or below the voltage cutoffs
-  if (motor_temps.motor_controller_temperature >= MOTORCONTROLLER_TEMP_MAX
-      || motor_temps.motor_temperature >= MOTOR_TEMP_MAX)       return 0;
+  if (preChargeData.context->bms_status.ltc_count != NUMBER_OF_LTCS) {
+    // BMS-1.10: LTC Count does not match configuration
+    Serial.println("Incorrect number of LTCs");
+    return 0;
+  }
+
+  if (preChargeData.context->motor_stats.error_message == 2) {
+    // MC-1.2: High Voltage Fault from Motor Controller
+    return 0;
+  }
+
+  // HV system passed safety checks
   return 1;
 }
 
