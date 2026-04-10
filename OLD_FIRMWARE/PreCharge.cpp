@@ -176,7 +176,7 @@ void gyro_signals(GyroKalman *gyro_kalman) {
   }
   
   // Request 14 bytes: 6 accel + 2 temp + 6 gyro
-  byte bytesReceived = Wire.requestFrom(0x68, 14, true);
+  byte bytesReceived = Wire.requestFrom((uint8_t)0x68, (uint8_t)14, true);
   if (bytesReceived != 14) {
     return;
   }
@@ -369,7 +369,7 @@ void initI2C(GyroKalman *gyro_kalman) {
     return;
   }
   
-  byte bytesRcvd = Wire.requestFrom(0x68, 1, true);
+  byte bytesRcvd = Wire.requestFrom((uint8_t)0x68, (uint8_t)1, true);
   if (bytesRcvd == 1) {
     byte whoami = Wire.read();
     Serial.printf("[GYRO INIT] WHO_AM_I register = 0x%02X (should be 0x68)\n", whoami);

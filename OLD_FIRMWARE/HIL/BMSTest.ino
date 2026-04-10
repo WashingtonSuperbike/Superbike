@@ -18,7 +18,7 @@
 // #define BMSC1_LTC2_REQUEST_CELLS 0x01de0801
 
 // BMS CAN Message IDs
-#define DD_BMSC_STATUS_IND          0x01df0e01  // BMS status indication
+#define DD_BMS_STATUS_IND          0x01df0e01  // BMS status indication
 #define DD_BMSC_TH_STATUS_IND       0x01df0e00  // BMS thermistor readings
 #define DD_BMS_CVCUR_REQ            0x01de0800  // REQUEST  cell voltages and currents (LTC1)
 #define DD_BMS_CVCUR_C1_TO_C4_RSP   0x01df0900  // RESPONSE cell voltages and currents (cells 1-4)
@@ -26,7 +26,7 @@
 #define DD_BMS_CVCUR_C9_TO_C12_RSP  0x01df0b00  // RESPONSE cell voltages and currents (cells 9-12)
 // For LTC2, just OR with 0x01 to change the ID
  
-// BMS Fault Codes For DD_BMSC_STATUS_IND
+// BMS Fault Codes For DD_BMS_STATUS_IND
 // BMS status flag definitions (msg.buf[0])
 #define BMS_FLAG_CELL_HVC        0x01 // at least one cell voltage is > HVC 
 #define BMS_FLAG_CELL_LVC        0x02 // at least one cell voltage is < LVC 
@@ -120,7 +120,7 @@ void sendNormal() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;  // no voltage faults
   msg.buf[1] = 0;  // no thermistor faults
@@ -144,7 +144,7 @@ void sendOvertempFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;
   msg.buf[1] = BMS_FAULT_OVERTEMP;  // thermistor overtemp fault
@@ -194,7 +194,7 @@ void sendHVCFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = BMS_FLAG_CELL_HVC;  // at least one cell voltage is > HVC
   msg.buf[1] = 0;
@@ -209,7 +209,7 @@ void sendLVCFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = BMS_FLAG_CELL_LVC;  // at least one cell voltage is < LVC
   msg.buf[1] = 0;
@@ -224,7 +224,7 @@ void sendBVCFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = BMS_FLAG_CELL_BVC;  // at least one cell voltage is > BVC
   msg.buf[1] = 0;
@@ -239,7 +239,7 @@ void sendUnlockedFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;
   msg.buf[1] = BMS_FAULT_NOT_LOCKED;  // configuration not locked
@@ -254,7 +254,7 @@ void sendCensusFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;
   msg.buf[1] = BMS_FAULT_CENSUS;  // not all cells present
@@ -269,7 +269,7 @@ void sendThermistorCensusFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
 
-  msg.id = DD_BMSC_STATUS_IND;
+  msg.id = DD_BMS_STATUS_IND;
   msg.len = 4;
   msg.buf[0] = 0;
   msg.buf[1] = BMS_FAULT_THERM_CENSUS;  // not all thermistors present
