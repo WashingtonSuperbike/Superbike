@@ -30,13 +30,6 @@ void sendHighVoltageFault();
 void sendLowVoltageFault();
 void sendStallFault();
 void sendOverTemperatureFault();
-void sendInternalVoltsFault();
-void sendThrottleSignalFault();
-void sendInternalResetFault();
-void sendThrottleCircuitFault();
-void sendAngleSensorFault();
-void sendMotorOverTemperatureFault();
-void sendGalvanometerFault();
  
 void setup() {
   Serial.begin(115200);
@@ -55,74 +48,52 @@ void setup() {
   Serial.println("CAN bus initialized. Sending initial faults...");
  
   // Send initial faults once during setup
-  sendIdentificationFault();
-  delay(1000);
-  sendHighVoltageFault();
-  delay(1000);
-  sendLowVoltageFault();
-  delay(1000);
-  sendStallFault();
-  delay(1000);
-  sendOverTemperatureFault();
-  delay(1000);
+  // sendIdentificationFault();
+  // delay(1000);
+  // sendHighVoltageFault();
+  // delay(1000);
+  // sendLowVoltageFault();
+  // delay(1000);
+  // sendStallFault();
+  // delay(1000);
+  // sendOverTemperatureFault();
+  // delay(1000);
 }
  
 // The loop function is required for the code to compile
 void loop() {
   CAN_2.events(); // Keeps the CAN stack processing
-  sendIdentificationFault();
+ delay(10000);
+  sendStats();
+  delay(50);
+  sendTemps();
+  delay(50);
+
+
+  // sendIdentificationFault();
   // delay(50);
-  // sendStats();
-  delay(1000);
+  // // sendStats();
+  // delay(1000);
   sendHighVoltageFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendLowVoltageFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendStallFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendOverTemperatureFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendInternalVoltsFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendThrottleSignalFault();
-  // delay(50);
-  // sendStats(); 
-  delay(1000);
-  sendInternalResetFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendThrottleCircuitFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendAngleSensorFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendMotorOverTemperatureFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
-  sendGalvanometerFault();
-  // delay(50);
-  // sendStats();
-  delay(1000);
+   delay(50);
+  // // sendStats();
+  // delay(1000);
+  // sendLowVoltageFault();
+  // // delay(50);
+  // // sendStats();
+  // delay(1000);
+  // sendStallFault();
+  // // delay(50);
+  // // sendStats();
+  // delay(1000);
+  // sendOverTemperatureFault();
+  // // delay(50);
+  // // sendStats();
+  // delay(1000);
 }
  
 void sendStats() {
   uint16_t rpm = 1250;
- 
   CAN_message_t msg;
   msg.flags.extended = 1; // Extended ID (29-bit)
   msg.id = MOTOR_STATS_MSG;
@@ -149,8 +120,10 @@ void sendTemps() {
   msg.buf[3] = 0;  
   CAN_2.write(msg);
 }
- 
-//MC_1.1 Identification Angle
+
+// MC_1.1
+// Failed to identify motor’s electrical angle. This only occurs during startup.  
+// Display a warning.  
 void sendIdentificationFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -161,8 +134,10 @@ void sendIdentificationFault() {
   CAN_2.write(msg);
   Serial.println("Sent: Identification Fault");
 }
- 
-//MC_1.2 Over Voltage
+
+// MC_1.2 Over Voltage: Success 04/8/2026 
+//Motor controller high voltage fault
+// The contactor should open immediately.  
 void sendHighVoltageFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -173,8 +148,10 @@ void sendHighVoltageFault() {
   CAN_2.write(msg);
   Serial.println("Sent: High Voltage Fault");
 }
- 
-//MC_1.3 Low Voltage
+
+// MC_1.3 Low Voltage: 
+// Motor controller low voltage fault
+// Display critical warning 
 void sendLowVoltageFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -186,7 +163,9 @@ void sendLowVoltageFault() {
   Serial.println("Sent: Low Voltage Fault");
 }
  
-//MC_1.4 Stall
+// MC_1.4 Stall: 
+// The motor can’t provide speed feedback to the controller 
+// Display critical warning 
 void sendStallFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -197,8 +176,10 @@ void sendStallFault() {
   CAN_2.write(msg);
   Serial.println("Sent: Stall Fault");
 }
- 
-//MC_1.5 Internal Volts 
+
+// MC_1.5 Internal Volts: 
+// Potential wiring fault, faulty controller 
+// Display critical warning 
 void sendInternalVoltsFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -210,7 +191,10 @@ void sendInternalVoltsFault() {
   Serial.println("Sent: Internal Volts Fault");
 }
 
-//MC_1.6 Controller Over Temperature
+// MC_1.6  Controller Over Temperature: 
+//  Controller automatically stops at 100C, restarts at 80C.  
+// Our code will set a custom max temperature with the contactor opening.
+// The display should show a warning when the MC reaches 70 degrees C 
 void sendOverTemperatureFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -222,7 +206,8 @@ void sendOverTemperatureFault() {
   Serial.println("Sent: Controller Over Temperature Fault");
 }
 
-//MC_1.7 Throttle Signal at Powerup
+// MC_1.7 Throttle Signal at Powerup: 
+// Prevent powerup. Ignore this if it happens during operation 
 void sendThrottleSignalFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -234,7 +219,9 @@ void sendThrottleSignalFault() {
   Serial.println("Sent: Throttle SignalFault");
 }
 
-//MC_1.8 Internal Reset
+// MC_1.8 Internal Reset:
+// May be caused by some transient fault condition like a temporary over-current
+// This can occur during normal operations. Only display a warning. 
 void sendInternalResetFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -246,7 +233,9 @@ void sendInternalResetFault() {
   Serial.println("Sent: Internal Reset Fault");
 }
 
-//MC_1.9 Throttle Circuit
+// MC_1.9 Throttle Circuit:
+// Issue with throttle. (Short, open circuit?)
+// Display a warning. 
 void sendThrottleCircuitFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -258,7 +247,9 @@ void sendThrottleCircuitFault() {
   Serial.println("Sent: Throttle Circuit Fault");
 }
 
-//MC_1.10 Angle Sensor
+// MC_1.10 Angle Sensor:
+// Speed sensor issue
+// Displays “Angle Sensor Fault” if flagged, only display warning  
 void sendAngleSensorFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -270,7 +261,9 @@ void sendAngleSensorFault() {
   Serial.println("Sent: Angle Sensor Fault");
 }
 
-//MC_1.11 Motor Over Temperature
+// MC_1.11 Motor Over Temperature: 
+// Controller shuts down when motor reaches the “configured maximum” 
+// Contactor opens when motor reaches max temperature: 110C 
 void motorOverTemperatureFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
@@ -282,7 +275,9 @@ void motorOverTemperatureFault() {
   Serial.println("Sent: Motor Over Temperature Fault");
 }
 
-//MC_1.12 Galvanometer Fault
+// MC_1.12 Galvanometer Sensor: 
+// Issues with current sensing. 
+// Only display a warning. 
 void sendGalvanometerFault() {
   CAN_message_t msg;
   msg.flags.extended = 1;
