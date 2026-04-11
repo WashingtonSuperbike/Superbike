@@ -109,11 +109,11 @@ struct DashboardState {
  * be updated later without recreating them each frame.
  */
 struct DashboardWidgets {
-    // Speedometer meter
-    lv_obj_t              *meter;
+    // Speedometer dial (static image + dynamic overlays)
+    lv_obj_t              *dial_img;
     lv_obj_t              *meter_speed_label;
-    lv_meter_indicator_t  *current_motoring_indic;
-    lv_meter_indicator_t  *current_regen_indic;
+    lv_obj_t              *current_motoring_arc;
+    lv_obj_t              *current_regen_arc;
 
     // Needle as a standalone lv_line (avoids full-meter redraw on every update)
     lv_obj_t              *needle_line;

@@ -8,6 +8,11 @@
 
 # Files
 
+# Images
+*.png
+*.jpg
+*.jpeg
+
 # Prerequisites
 *.d
 
@@ -49,3 +54,6 @@
 
 # debug information files
 *.dwo
+
+# Compilation artifacts
+*.yml.orig

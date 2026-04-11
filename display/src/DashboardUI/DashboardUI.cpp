@@ -49,8 +49,17 @@ static DashboardWidgets w;
 
 // Previous values for dirty-checking (only redraw when changed)
 static int prev_speed = -1;
-static int32_t prev_current_value = 0;   // absolute amps, clamped to 500
+static int32_t prev_current_value = 0;   // absolute amps, clamped to 100
 static int     prev_current_dir   = 0;   // -1 regen, 0 idle, +1 motoring
+static int     prev_batt_temp     = -999;
+static int     prev_motor_temp    = -999;
+static int     prev_mc_temp       = -999;
+static int     prev_gyro_roll     = -999;
+static int     prev_batt_mv       = -999; // (int)(voltage * 10)
+static int     prev_batt_pct      = -999;
+static int     prev_error_msg     = -1;
+static int     prev_bms_flag      = -1;
+static bool    prev_sd_started    = false;
 
 // ============================================================================
 // PLACEHOLDER IMAGES
@@ -137,87 +146,80 @@ void dashboard_create(void)
     lv_obj_t *scr = lv_scr_act();
     lv_obj_set_style_bg_color(scr, CLR_BG, 0);
 
-    // -- SPEEDOMETER METER (centre-left) --
-    w.meter = lv_meter_create(scr);
-    lv_obj_set_size(w.meter, 430, 430);
-    lv_obj_set_pos(w.meter, 35, 15);
-    lv_obj_set_style_bg_opa(w.meter, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(w.meter, 0, 0);
-    lv_obj_remove_style(w.meter, NULL, LV_PART_KNOB);
-    lv_obj_clear_flag(w.meter, LV_OBJ_FLAG_CLICKABLE);
+    // -- SPEEDOMETER DIAL (static pre-rendered image) --
+    // Tick marks and labels are baked into a 430x430 RGB565 image to avoid
+    // redrawing 141 ticks every frame (the main FPS bottleneck with lv_meter).
+    LV_IMG_DECLARE(dial_face);
+    w.dial_img = lv_img_create(scr);
+    lv_img_set_src(w.dial_img, &dial_face);
+    lv_obj_set_pos(w.dial_img, 35, 15);
+    lv_obj_clear_flag(w.dial_img, LV_OBJ_FLAG_CLICKABLE);
 
-    // Tick label style: larger white font
-    lv_obj_set_style_text_font(w.meter, &lv_font_montserrat_20, LV_PART_TICKS);
-    lv_obj_set_style_text_color(w.meter, CLR_FG, LV_PART_TICKS);
+    // --- Current arcs (standalone, overlaid on dial image) ---
+    // Original meter current scale: range -100..+100, 210° sweep, rotation=60°
+    // In LVGL lv_arc angles: 0°=3 o'clock (CW). Meter 0°=12 o'clock (CW).
+    // Meter rotation 60° => arc start = 60+90 = 150°. Arc end = 150+210 = 360 = 0°.
+    // The arc widget size is 450x450 to match the r_mod=+10 offset from the 430px dial.
+    // Centered on dial center (250,230) => top-left = (250-225, 230-225) = (25, 5).
 
-    // --- Inner speed scale (0-140 mph, 210 degree sweep) ---
-    lv_meter_scale_t *speed_scale = lv_meter_add_scale(w.meter);
-    lv_meter_set_scale_range(w.meter, speed_scale, 0, 140, 210, 165);
+    // Motoring arc (blue): shows 0A to +current, clockwise from 0 mph origin
+    // 0A is at the midpoint of the -100..+100 range => 150 + 105 = 255° in arc coords
+    w.current_motoring_arc = lv_arc_create(scr);
+    lv_obj_set_size(w.current_motoring_arc, 450, 450);
+    lv_obj_set_pos(w.current_motoring_arc, 25, 5);
+    lv_arc_set_mode(w.current_motoring_arc, LV_ARC_MODE_NORMAL);
+    lv_arc_set_range(w.current_motoring_arc, 0, 100);
+    lv_arc_set_value(w.current_motoring_arc, 0);
+    lv_arc_set_bg_angles(w.current_motoring_arc, 165, 375);   // 0A (165°) to +100A (375°)
+    lv_arc_set_rotation(w.current_motoring_arc, 0);
+    lv_obj_set_style_arc_color(w.current_motoring_arc, CLR_BG, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(w.current_motoring_arc, CLR_MOTORING, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(w.current_motoring_arc, 10, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(w.current_motoring_arc, 10, LV_PART_INDICATOR);
+    lv_obj_remove_style(w.current_motoring_arc, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(w.current_motoring_arc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_opa(w.current_motoring_arc, LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(w.current_motoring_arc, LV_OBJ_FLAG_HIDDEN);
 
-    // Minor ticks: every 1 mph
-    lv_meter_set_scale_ticks(w.meter, speed_scale,
-        141,         // tick_cnt
-        2,           // width (px)
-        10,          // length (px)
-        lv_color_make(0x80, 0x80, 0x80));  // grey minor tick color
-
-    // Major ticks: every 10th minor tick = every 10 mph
-    lv_meter_set_scale_major_ticks(w.meter, speed_scale,
-        10,           // nth: every 10th tick is major
-        3,           // width (px)
-        18,          // length (px)
-        CLR_FG,      // white major tick + label color
-        16);         // label_gap: larger to push labels inward, avoid tick overlap
+    // Regen arc (green): shows -current to 0A, counter-clockwise from 0 mph origin
+    w.current_regen_arc = lv_arc_create(scr);
+    lv_obj_set_size(w.current_regen_arc, 450, 450);
+    lv_obj_set_pos(w.current_regen_arc, 25, 5);
+    lv_arc_set_mode(w.current_regen_arc, LV_ARC_MODE_REVERSE);
+    lv_arc_set_range(w.current_regen_arc, 0, 100);
+    lv_arc_set_value(w.current_regen_arc, 0);
+    lv_arc_set_bg_angles(w.current_regen_arc, 15, 165);       // -100A (15°) to 0A (165°)
+    lv_arc_set_rotation(w.current_regen_arc, 0);
+    lv_obj_set_style_arc_color(w.current_regen_arc, CLR_BG, LV_PART_MAIN);
+    lv_obj_set_style_arc_color(w.current_regen_arc, CLR_REGEN, LV_PART_INDICATOR);
+    lv_obj_set_style_arc_width(w.current_regen_arc, 10, LV_PART_MAIN);
+    lv_obj_set_style_arc_width(w.current_regen_arc, 10, LV_PART_INDICATOR);
+    lv_obj_remove_style(w.current_regen_arc, NULL, LV_PART_KNOB);
+    lv_obj_clear_flag(w.current_regen_arc, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_bg_opa(w.current_regen_arc, LV_OPA_TRANSP, 0);
+    lv_obj_add_flag(w.current_regen_arc, LV_OBJ_FLAG_HIDDEN);
 
     // Speed needle: standalone lv_line so only its narrow strip is redrawn each frame.
-    // lv_meter_add_needle_line() would invalidate the full 430x430 meter bounding box
-    // on every value change; an external lv_line only invalidates its own thin strip.
-    w.needle_line = lv_line_create(lv_scr_act());
+    w.needle_line = lv_line_create(scr);
     lv_obj_set_style_line_width(w.needle_line, 5, 0);
     lv_obj_set_style_line_color(w.needle_line, CLR_NEEDLE, 0);
     lv_obj_set_style_line_rounded(w.needle_line, true, 0);
-    // Initialise at 0 mph (angle=165°, pointing lower-right from meter centre)
-    // Meter centre on screen: (35+215, 15+215) = (250, 230); needle length = radius(215) - 50 = 165px
+    // Initialise at 0 mph (angle=165°, pointing lower-left from dial centre)
+    // Dial centre on screen: (35+215, 15+215) = (250, 230); needle length = 195px
     // LVGL angle convention: 0°=12-o'clock, clockwise. x=sin(θ), y=-cos(θ)
     w.needle_pts[0] = {250, 230};
-    w.needle_pts[1] = {250 + (lv_coord_t)(165.0f * sinf(255.0f * M_PI / 180.0f)),
-                       230 - (lv_coord_t)(165.0f * cosf(255.0f * M_PI / 180.0f))};
+    w.needle_pts[1] = {(lv_coord_t)(250 + 195.0f * sinf(255.0f * M_PI / 180.0f)),
+                       (lv_coord_t)(230 - 195.0f * cosf(255.0f * M_PI / 180.0f))};
     lv_line_set_points(w.needle_line, w.needle_pts, 2);
 
-    // --- Outer current scale (-500 to +500 A) ---
-    // rotation=60 places 0A at 60 + (500/1000)*210 = 165deg, aligned with 0 mph.
-    // Motoring (0 to +500) arcs clockwise from 0 mph; regen (-500 to 0) arcs counter-clockwise.
-    lv_meter_scale_t *current_scale = lv_meter_add_scale(w.meter);
-    lv_meter_set_scale_range(w.meter, current_scale, -500, 500, 210, 60);
-
-    // Suppress ticks on current scale: use 2 ticks (minimum safe) with zero dimensions
-    // cnt=1 causes divide-by-zero in LVGL: angle_range / (tick_cnt - 1)
-    lv_meter_set_scale_ticks(w.meter, current_scale, 2, 0, 0, lv_color_black());
-
-    // Motoring arc (blue), outside the tick marks (positive r_mod), hidden initially
-    w.current_motoring_indic = lv_meter_add_arc(w.meter, current_scale,
-        10,              // arc width (px)
-        CLR_MOTORING,    // blue
-        10);             // r_mod: +10 places arc outside the tick ring
-    lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
-    lv_meter_set_indicator_end_value(w.meter, w.current_motoring_indic, 0);
-    w.current_motoring_indic->opa = LV_OPA_TRANSP;
-
-    // Regen arc (green), outside the tick marks, hidden initially
-    w.current_regen_indic = lv_meter_add_arc(w.meter, current_scale,
-        10,              // arc width (px)
-        CLR_REGEN,       // green
-        10);             // r_mod: +10 outside the tick ring
-    lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, 0);
-    lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
-    w.current_regen_indic->opa = LV_OPA_TRANSP;
-
-    // --- Digital speed readout inside meter ---
-    w.meter_speed_label = lv_label_create(w.meter);
+    // --- Digital speed readout (positioned over dial image) ---
+    w.meter_speed_label = lv_label_create(scr);
     lv_label_set_text(w.meter_speed_label, "0");
     lv_obj_set_style_text_color(w.meter_speed_label, CLR_FG, 0);
     lv_obj_set_style_text_font(w.meter_speed_label, &lv_font_montserrat_144, 0);
-    lv_obj_align(w.meter_speed_label, LV_ALIGN_BOTTOM_MID, 0, -50);
+    lv_obj_set_style_text_align(w.meter_speed_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(w.meter_speed_label, 300);
+    lv_obj_set_pos(w.meter_speed_label, 100, 300);
 
     // -- TEMPERATURE ARCS (right column) --
     const lv_coord_t arc_x = 570;
@@ -337,8 +339,8 @@ void dashboard_refresh(const DashboardState &state)
         float angle_deg = 255.0f + (float)speed * (210.0f / 140.0f);
         float angle_rad = angle_deg * (float)M_PI / 180.0f;
         w.needle_pts[0] = {250, 230};
-        w.needle_pts[1] = {250 + (lv_coord_t)(165.0f * sinf(angle_rad)),
-                           230 - (lv_coord_t)(165.0f * cosf(angle_rad))};
+        w.needle_pts[1] = {(lv_coord_t)(250 + 195.0f * sinf(angle_rad)),
+                           (lv_coord_t)(230 - 195.0f * cosf(angle_rad))};
         lv_line_set_points(w.needle_line, w.needle_pts, 2);
         snprintf(buf, sizeof(buf), "%d", speed);
         lv_label_set_text(w.meter_speed_label, buf);
@@ -352,98 +354,128 @@ void dashboard_refresh(const DashboardState &state)
         if (state.thermistors.temps[i] > max_batt_temp)
             max_batt_temp = state.thermistors.temps[i];
     }
-    lv_arc_set_value(w.batt_temp_arc, (int)max_batt_temp);
-    snprintf(buf, sizeof(buf), "%d C", (int)max_batt_temp);
-    lv_label_set_text(w.batt_temp_label, buf);
+    int batt_temp_int = (int)max_batt_temp;
+    if (batt_temp_int != prev_batt_temp) {
+        lv_arc_set_value(w.batt_temp_arc, batt_temp_int);
+        snprintf(buf, sizeof(buf), "%d C", batt_temp_int);
+        lv_label_set_text(w.batt_temp_label, buf);
+        prev_batt_temp = batt_temp_int;
+    }
 
     // Motor temperature
-    lv_arc_set_value(w.motor_temp_arc, (int)state.temps.motor_temperature);
-    snprintf(buf, sizeof(buf), "%d C", (int)state.temps.motor_temperature);
-    lv_label_set_text(w.motor_temp_label, buf);
+    int motor_temp_int = (int)state.temps.motor_temperature;
+    if (motor_temp_int != prev_motor_temp) {
+        lv_arc_set_value(w.motor_temp_arc, motor_temp_int);
+        snprintf(buf, sizeof(buf), "%d C", motor_temp_int);
+        lv_label_set_text(w.motor_temp_label, buf);
+        prev_motor_temp = motor_temp_int;
+    }
 
     // Motor controller temperature
-    lv_arc_set_value(w.mc_temp_arc, (int)state.temps.motor_controller_temperature);
-    snprintf(buf, sizeof(buf), "%d C", (int)state.temps.motor_controller_temperature);
-    lv_label_set_text(w.mc_temp_label, buf);
+    int mc_temp_int = (int)state.temps.motor_controller_temperature;
+    if (mc_temp_int != prev_mc_temp) {
+        lv_arc_set_value(w.mc_temp_arc, mc_temp_int);
+        snprintf(buf, sizeof(buf), "%d C", mc_temp_int);
+        lv_label_set_text(w.mc_temp_label, buf);
+        prev_mc_temp = mc_temp_int;
+    }
 
     // -- Gyro (roll angle) --
     int roll = (int)state.gyro.roll_angle;
-    lv_arc_set_value(w.gyro_arc, roll);
-    snprintf(buf, sizeof(buf), "%d deg", roll);
-    lv_label_set_text(w.gyro_label, buf);
+    if (roll != prev_gyro_roll) {
+        lv_arc_set_value(w.gyro_arc, roll);
+        snprintf(buf, sizeof(buf), "%d deg", roll);
+        lv_label_set_text(w.gyro_label, buf);
+        prev_gyro_roll = roll;
+    }
 
     // -- Motor current arcs (outer ring) --
     float current = state.motor.motor_current;
     float abs_current = fabsf(current);
-    if (abs_current > 500.0f) abs_current = 500.0f;
+    if (abs_current > 100.0f) abs_current = 100.0f;
 
     int cur_dir = (current > 0.0f) ? 1 : (current < 0.0f) ? -1 : 0;
     int32_t cur_val = (int32_t)abs_current;
     if (cur_dir != prev_current_dir || cur_val != prev_current_value) {
         if (cur_dir > 0) {
-            lv_meter_set_indicator_start_value(w.meter, w.current_motoring_indic, 0);
-            lv_meter_set_indicator_end_value(w.meter, w.current_motoring_indic, cur_val);
-            w.current_motoring_indic->opa = LV_OPA_COVER;
-            w.current_regen_indic->opa    = LV_OPA_TRANSP;
+            lv_arc_set_value(w.current_motoring_arc, cur_val);
+            lv_obj_clear_flag(w.current_motoring_arc, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(w.current_regen_arc, LV_OBJ_FLAG_HIDDEN);
         } else if (cur_dir < 0) {
-            lv_meter_set_indicator_start_value(w.meter, w.current_regen_indic, -cur_val);
-            lv_meter_set_indicator_end_value(w.meter, w.current_regen_indic, 0);
-            w.current_regen_indic->opa    = LV_OPA_COVER;
-            w.current_motoring_indic->opa = LV_OPA_TRANSP;
+            lv_arc_set_value(w.current_regen_arc, cur_val);
+            lv_obj_clear_flag(w.current_regen_arc, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(w.current_motoring_arc, LV_OBJ_FLAG_HIDDEN);
         } else {
-            w.current_motoring_indic->opa = LV_OPA_TRANSP;
-            w.current_regen_indic->opa    = LV_OPA_TRANSP;
+            lv_obj_add_flag(w.current_motoring_arc, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(w.current_regen_arc, LV_OBJ_FLAG_HIDDEN);
         }
-        lv_obj_invalidate(w.meter);
         prev_current_dir   = cur_dir;
         prev_current_value = cur_val;
     }
 
     // -- Battery voltage (sum of HV cells) --
-    snprintf(buf, sizeof(buf), "%.1f V", state.battery.hv_series_voltage);
-    lv_label_set_text(w.batt_voltage_label, buf);
+    int batt_mv = (int)(state.battery.hv_series_voltage * 10.0f);
+    if (batt_mv != prev_batt_mv) {
+        snprintf(buf, sizeof(buf), "%.1f V", state.battery.hv_series_voltage);
+        lv_label_set_text(w.batt_voltage_label, buf);
+        prev_batt_mv = batt_mv;
+    }
 
-    // Battery % estimate: linear map across nominal 20s LiFePO4 range
-    // 20 cells x 2.5V empty = 50V, 20 cells x 3.65V full = 73V
-    float pct = (state.battery.hv_series_voltage - 50.0f)
-              / (73.0f - 50.0f) * 100.0f;
+    // Battery % estimate: linear map across nominal 24s LiIO range
+    // 24 cells x 2.5V empty = 60V, 24 cells x 4.2V full = 100.8V
+    float pct = (state.battery.hv_series_voltage - 60.0f)
+              / (100.8f - 60.0f) * 100.0f;
     if (pct > 100.0f) pct = 100.0f;
     if (pct < 0.0f)   pct = 0.0f;
-    snprintf(buf, sizeof(buf), "%.0f %%", pct);
-    lv_label_set_text(w.batt_percent_label, buf);
+    int pct_int = (int)pct;
+    if (pct_int != prev_batt_pct) {
+        snprintf(buf, sizeof(buf), "%d %%", pct_int);
+        lv_label_set_text(w.batt_percent_label, buf);
 
-    if (pct < 20.0f)
-        lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_RED, 0);
-    else if (pct < 50.0f)
-        lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_YELLOW, 0);
-    else
-        lv_obj_set_style_text_color(w.batt_icon, CLR_FG, 0);
+        if (pct < 20.0f)
+            lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_RED, 0);
+        else if (pct < 50.0f)
+            lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_YELLOW, 0);
+        else
+            lv_obj_set_style_text_color(w.batt_icon, CLR_FG, 0);
+        prev_batt_pct = pct_int;
+    }
 
     // -- Motor error message --
-    if (state.motor.error_message != 0) {
-        snprintf(buf, sizeof(buf), "ERR: 0x%04X", state.motor.error_message);
-        lv_label_set_text(w.error_label, buf);
-        lv_obj_clear_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        lv_obj_add_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
+    int err_msg = state.motor.error_message;
+    if (err_msg != prev_error_msg) {
+        if (err_msg != 0) {
+            snprintf(buf, sizeof(buf), "ERR: 0x%04X", err_msg);
+            lv_label_set_text(w.error_label, buf);
+            lv_obj_clear_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
+        }
+        prev_error_msg = err_msg;
     }
 
     // -- BMS status flag --
     int bms_flag = (int)state.bms.bms_status_flag;
-    if (bms_flag == 0) {
-        lv_label_set_text(w.bms_status_label, "BMS: OK");
-        lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
-    } else {
-        snprintf(buf, sizeof(buf), "BMS: 0x%02X", bms_flag);
-        lv_label_set_text(w.bms_status_label, buf);
-        lv_obj_set_style_text_color(w.bms_status_label, CLR_WARN_RED, 0);
+    if (bms_flag != prev_bms_flag) {
+        if (bms_flag == 0) {
+            lv_label_set_text(w.bms_status_label, "BMS: OK");
+            lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
+        } else {
+            snprintf(buf, sizeof(buf), "BMS: 0x%02X", bms_flag);
+            lv_label_set_text(w.bms_status_label, buf);
+            lv_obj_set_style_text_color(w.bms_status_label, CLR_WARN_RED, 0);
+        }
+        prev_bms_flag = bms_flag;
     }
 
     // -- SD card icon --
-    if (state.sd_started) {
-        lv_obj_set_style_text_color(w.sd_icon, CLR_FG, 0);
-    } else {
-        lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_YELLOW, 0);
+    if (state.sd_started != prev_sd_started) {
+        if (state.sd_started) {
+            lv_obj_set_style_text_color(w.sd_icon, CLR_FG, 0);
+        } else {
+            lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_YELLOW, 0);
+        }
+        prev_sd_started = state.sd_started;
     }
 }
 

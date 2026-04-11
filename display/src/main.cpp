@@ -38,8 +38,8 @@ static void simulationTask(void *param)
 
         // RPM: 0-5000 sine wave
         dashState.motor.RPM = 2500.0f + 2500.0f * sin_t;
-        // Motor current: -50 to 250 A
-        dashState.motor.motor_current = 100.0f + 150.0f * sin_t;
+        // Motor current: -100 to 100 A
+        dashState.motor.motor_current = 100.0f * sin_t;
         // HV voltage from motor controller
         dashState.motor.motor_controller_battery_voltage = 60.0f + 8.0f * cos_t;
         // Error message: flash briefly every ~20 seconds
@@ -124,15 +124,15 @@ void setup()
     );
 
     // Simulation task: animates gauge values (disabled — real CAN data is used)
-    xTaskCreatePinnedToCore(
-        simulationTask,
-        "dash_sim",
-        4096,
-        NULL,
-        1,
-        NULL,
-        0
-    );
+    // xTaskCreatePinnedToCore(
+    //     simulationTask,
+    //     "dash_sim",
+    //     4096,
+    //     NULL,
+    //     1,
+    //     NULL,
+    //     0
+    // );
 
     xTaskCreatePinnedToCore(
         [](void *param) {
