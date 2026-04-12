@@ -16,6 +16,7 @@
 #include "DashboardUI/DashboardUI.h"
 #include "CAN/CAN_Receive.h"
 #include "SDCard/sd_card.h"
+#include "RTC/rtc.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -101,6 +102,15 @@ void setup()
     // Initialize SD card SPI bus (uses CH422G expander for CS)
     Serial.println("Initializing SD card");
     sd_init(board);
+
+    // Initialize RTC (PCF85063A on shared I2C bus, addr 0x51)
+    Serial.println("Initializing RTC");
+    rtc_init();
+
+    // Read RTC and print filename string for verification (RTC-02)
+    char rtc_filename[30];
+    rtc_get_filename(rtc_filename, sizeof(rtc_filename));
+    Serial.printf("RTC filename: %s\n", rtc_filename);
 
     Serial.println("Initializing LVGL");
     lvgl_port_init(board->getLCD(), board->getTouch());

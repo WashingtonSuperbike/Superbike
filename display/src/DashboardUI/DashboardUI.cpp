@@ -473,7 +473,7 @@ void dashboard_refresh(const DashboardState &state)
         if (state.sd_started) {
             lv_obj_set_style_text_color(w.sd_icon, CLR_FG, 0);
         } else {
-            lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_YELLOW, 0);
+            lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_RED, 0);
         }
         prev_sd_started = state.sd_started;
     }
