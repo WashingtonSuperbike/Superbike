@@ -15,6 +15,7 @@
 #include "lvgl_config/lvgl_v8_port.h"
 #include "DashboardUI/DashboardUI.h"
 #include "CAN/CAN_Receive.h"
+#include "SDCard/sd_card.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -65,8 +66,8 @@ static void simulationTask(void *param)
         // BMS: flag an error briefly every ~30 seconds
         dashState.bms.bms_status_flag = (((int)(t * 10) % 300) < 10) ? 1.0f : 0.0f;
 
-        // SD card: always present in simulation
-        dashState.sd_started = true;
+        // SD card: owned by sd_poll_task — do not set here
+        // dashState.sd_started = true;
 
         t += 0.02f;
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -96,6 +97,10 @@ void setup()
 #endif
 #endif
     assert(board->begin());
+
+    // Initialize SD card SPI bus (uses CH422G expander for CS)
+    Serial.println("Initializing SD card");
+    sd_init(board);
 
     Serial.println("Initializing LVGL");
     lvgl_port_init(board->getLCD(), board->getTouch());
@@ -148,6 +153,17 @@ void setup()
         1,
         NULL,
         0
+    );
+
+    // SD card mount poll task: checks every 500ms, updates dashState.sd_started
+    xTaskCreatePinnedToCore(
+        sd_poll_task,
+        "sd_poll",
+        4096,
+        &dashState,
+        1,
+        NULL,
+        0   // Core 0 — avoids SPI contention with LVGL on Core 1
     );
 
     Serial.println("Dashboard running");
