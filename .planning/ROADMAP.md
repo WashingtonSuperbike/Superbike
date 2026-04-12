@@ -49,10 +49,10 @@ Plans:
 **Goal**: SD card and RTC are both initialized at boot within the existing display init sequence; sd_icon reflects live mount state and the RTC provides a datetime string for log filenames
 **Depends on**: Phase 1
 **Requirements**: SD-01, SD-02, SD-03, RTC-01, RTC-02, STATUS-01, STATUS-02
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 02-01-PLAN.md — SD card SPI driver with CH422G expander CS, SdFat mount, FreeRTOS poll task
+- [x] 02-01-PLAN.md — SD card SPI driver with CH422G expander CS, SdFat mount, FreeRTOS poll task
 - [ ] 02-02-PLAN.md — PCF85063A RTC driver, datetime filename formatter, sd_icon color fix, hardware verification
 
 **Success Criteria** (what must be TRUE):
@@ -82,5 +82,5 @@ Phases execute in numeric order: 2 → 3
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1. Speedometer Meter | v1.1 | 1/1 | Complete | 2026-04-03 |
-| 2. SD + RTC Hardware Bringup | v1.2 | 0/2 | Planned | - |
+| 2. SD + RTC Hardware Bringup | v1.2 | 1/2 | In Progress|  |
 | 3. Data Model + Logging Task | v1.2 | 0/TBD | Not started | - |
