@@ -53,7 +53,7 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — SD card SPI driver with CH422G expander CS, SdFat mount, FreeRTOS poll task
-- [ ] 02-02-PLAN.md — PCF85063A RTC driver, datetime filename formatter, sd_icon color fix, hardware verification
+- [x] 02-02-PLAN.md — PCF85063A RTC driver, datetime filename formatter, sd_icon color fix, hardware verification
 
 **Success Criteria** (what must be TRUE):
   1. With a card inserted at boot, SD mounts successfully via SPI (MOSI=11, CLK=12, MISO=13, CS via CH422G pin 4) and the sd_icon turns white
