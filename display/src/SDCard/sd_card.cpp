@@ -58,8 +58,12 @@ static bool do_mount()
         if (sd.card()->readCID(&cid)) {
             return true;  // card still responding
         }
-        // Card removed — deassert CS so the bus is clean for a remount attempt
+        // Card removed — deassert CS and report immediately. Do NOT fall through
+        // to sd.begin(): it blocks for ~2s (SD_INIT_TIMEOUT) when no card is
+        // present, which is what caused the slow red transition. The next poll
+        // cycle will attempt remount naturally.
         expander->digitalWrite(SD_CS, HIGH);
+        return false;
     }
 
     // Assert expander CS (active low) before starting transaction
