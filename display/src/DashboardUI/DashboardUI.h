@@ -97,7 +97,7 @@ struct DashboardState {
     DashboardBatteryVoltages  battery;
     DashboardGyroData         gyro;
     DashboardThermistorTemps  thermistors;
-    bool sd_started;
+    volatile bool sd_started;
 };
 
 // ============================================================================
