@@ -48,21 +48,21 @@ typedef struct {
 // Static I2C helpers
 // ============================================================================
 
-static void DEV_I2C_Write_Byte(uint8_t addr, uint8_t reg, uint8_t Value) {
+static esp_err_t DEV_I2C_Write_Byte(uint8_t addr, uint8_t reg, uint8_t Value) {
     uint8_t buf[2] = {reg, Value};
-    i2c_master_write_to_device(RTC_I2C_PORT, addr, buf, sizeof(buf), RTC_I2C_TIMEOUT_MS);
+    return i2c_master_write_to_device(RTC_I2C_PORT, addr, buf, sizeof(buf), RTC_I2C_TIMEOUT_MS);
 }
 
-static void DEV_I2C_Write_nByte(uint8_t addr, uint8_t *pData, uint32_t Len) {
-    i2c_master_write_to_device(RTC_I2C_PORT, addr, pData, Len, RTC_I2C_TIMEOUT_MS);
+static esp_err_t DEV_I2C_Write_nByte(uint8_t addr, uint8_t *pData, uint32_t Len) {
+    return i2c_master_write_to_device(RTC_I2C_PORT, addr, pData, Len, RTC_I2C_TIMEOUT_MS);
 }
 
-static void DEV_I2C_Read_Byte(uint8_t addr, uint8_t reg, uint8_t *data) {
-    i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, data, 1, RTC_I2C_TIMEOUT_MS);
+static esp_err_t DEV_I2C_Read_Byte(uint8_t addr, uint8_t reg, uint8_t *data) {
+    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, data, 1, RTC_I2C_TIMEOUT_MS);
 }
 
-static void DEV_I2C_Read_nByte(uint8_t addr, uint8_t reg, uint8_t *pData, uint32_t Len) {
-    i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, pData, Len, RTC_I2C_TIMEOUT_MS);
+static esp_err_t DEV_I2C_Read_nByte(uint8_t addr, uint8_t reg, uint8_t *pData, uint32_t Len) {
+    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, pData, Len, RTC_I2C_TIMEOUT_MS);
 }
 
 // ============================================================================
@@ -81,9 +81,10 @@ static int bcdToDec(uint8_t val) {
 // PCF85063A read function
 // ============================================================================
 
-static void PCF85063A_Read_now(datetime_t *time) {
+static esp_err_t PCF85063A_Read_now(datetime_t *time) {
     uint8_t bufss[7] = {0};
-    DEV_I2C_Read_nByte(PCF85063A_ADDRESS, RTC_SECOND_ADDR, bufss, 7);
+    esp_err_t err = DEV_I2C_Read_nByte(PCF85063A_ADDRESS, RTC_SECOND_ADDR, bufss, 7);
+    if (err != ESP_OK) return err;
     time->sec   = bcdToDec(bufss[0] & 0x7F);
     time->min   = bcdToDec(bufss[1] & 0x7F);
     time->hour  = bcdToDec(bufss[2] & 0x3F);
@@ -91,6 +92,7 @@ static void PCF85063A_Read_now(datetime_t *time) {
     time->dotw  = bcdToDec(bufss[4] & 0x07);
     time->month = bcdToDec(bufss[5] & 0x1F);
     time->year  = bcdToDec(bufss[6]) + YEAR_OFFSET;
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -104,8 +106,13 @@ void rtc_init() {
 }
 
 void rtc_get_filename(char *buf, size_t buflen) {
-    datetime_t t;
-    PCF85063A_Read_now(&t);
+    datetime_t t = {};
+    esp_err_t err = PCF85063A_Read_now(&t);
+    if (err != ESP_OK) {
+        snprintf(buf, buflen, "RTC_ERR_%d.csv", (int)err);
+        Serial.printf("RTC read failed: %d\n", (int)err);
+        return;
+    }
     snprintf(buf, buflen, "%04d-%02d-%02d_%02d%02d%02d.csv",
              (int)t.year, (int)t.month, (int)t.day,
              (int)t.hour, (int)t.min, (int)t.sec);
