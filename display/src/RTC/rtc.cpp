@@ -38,7 +38,7 @@ typedef struct {
 // ============================================================================
 
 #define PCF85063A_ADDRESS   (0x51)
-#define YEAR_OFFSET         (1970)
+#define YEAR_OFFSET         (2000)
 #define RTC_CTRL_1_ADDR     (0x00)
 #define RTC_CTRL_1_DEFAULT  (0x00)
 #define RTC_CTRL_1_CAP_SEL  (0x01)
