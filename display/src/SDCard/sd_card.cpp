@@ -21,6 +21,7 @@
 
 static SdFs   sd;
 static Board *s_board = nullptr;
+static bool   s_sd_ever_began = false;
 
 void sd_init(Board *board)
 {
@@ -55,7 +56,11 @@ static bool do_mount()
     // Card claims to be mounted — probe it with a CID read to confirm
     // it's physically present. errorCode() stays 0 even after card removal until
     // an actual I/O is attempted, so we must probe rather than just check the code.
-    if (sd.card() && sd.card()->errorCode() == 0) {
+    // Only probe the existing mount state if sd.begin() has succeeded at least
+    // once. Without this guard, sd.card() may return a non-null internal pointer
+    // on a default-constructed SdFs object even before any successful begin(),
+    // which could skip the sd.begin() block and silently fail to mount.
+    if (s_sd_ever_began && sd.card() && sd.card()->errorCode() == 0) {
         cid_t cid;
         if (sd.card()->readCID(&cid)) {
             return true;  // card still responding
@@ -76,7 +81,9 @@ static bool do_mount()
     SdSpiConfig cfg(SD_DUMMY_GPIO, SHARED_SPI, SD_SCK_MHZ(25), &SPI);
     bool ok = sd.begin(cfg);
 
-    if (!ok) {
+    if (ok) {
+        s_sd_ever_began = true;
+    } else {
         // Deassert CS on failure so the bus is released cleanly
         expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
     }
