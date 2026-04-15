@@ -4,18 +4,20 @@
 #include "DashboardUI/DashboardUI.h"
 
 // SD card SPI pin definitions
-#define SD_CS       4   // CH422G expander logical pin 4 (I2C-controlled)
-#define SD_CLK      12
-#define SD_MISO     13
-#define SD_MOSI     11
+#define SD_EXPANDER_CS_PIN  4   // CH422G I/O expander logical pin 4 (I2C-controlled)
+#define SD_CLK              12
+#define SD_MISO             13
+#define SD_MOSI             11
 
-// SD_DUMMY_CS: a safe, unconnected ESP32 GPIO used as SdFat's csPin argument.
+// SD_DUMMY_GPIO: a safe, unconnected ESP32 GPIO used as SdFat's csPin argument.
 // GPIO 4 is unassigned in all board source files (LCD uses GPIOs 0-3 only for
 // DATA11-13/DE; CAN uses 15-16; I2C uses 8-9; RTC interrupt uses 6).
 // SdFat requires a real GPIO for its csPin — GPIO 4 will be briefly toggled
 // but is unconnected, causing no interference. Do NOT use SS (maps to GPIO 10
 // = LCD DATA4 on this board).
-#define SD_DUMMY_CS 4
+// NOTE: SD_EXPANDER_CS_PIN and SD_DUMMY_GPIO share the same numeric value (4)
+// but refer to entirely different hardware resources — expander I/O vs ESP32 GPIO.
+#define SD_DUMMY_GPIO       4
 
 static SdFs   sd;
 static Board *s_board = nullptr;
@@ -24,14 +26,14 @@ void sd_init(Board *board)
 {
     s_board = board;
 
-    // Configure CH422G expander pin 4 (SD_CS) as output, deasserted high
+    // Configure CH422G expander pin 4 (SD_EXPANDER_CS_PIN) as output, deasserted high
     auto expander = board->getIO_Expander()->getBase();
-    expander->pinMode(SD_CS, OUTPUT);
-    expander->digitalWrite(SD_CS, HIGH);
+    expander->pinMode(SD_EXPANDER_CS_PIN, OUTPUT);
+    expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
 
     // Configure dummy CS GPIO and hold it high so it doesn't glitch the bus
-    pinMode(SD_DUMMY_CS, OUTPUT);
-    digitalWrite(SD_DUMMY_CS, HIGH);
+    pinMode(SD_DUMMY_GPIO, OUTPUT);
+    digitalWrite(SD_DUMMY_GPIO, HIGH);
 
     // Disable SPI hardware CS — expander drives the real CS line
     SPI.setHwCs(false);
@@ -50,7 +52,7 @@ static bool do_mount()
 {
     auto expander = s_board->getIO_Expander()->getBase();
 
-    // Fast-path: card claims to be mounted — probe it with a CID read to confirm
+    // Card claims to be mounted — probe it with a CID read to confirm
     // it's physically present. errorCode() stays 0 even after card removal until
     // an actual I/O is attempted, so we must probe rather than just check the code.
     if (sd.card() && sd.card()->errorCode() == 0) {
@@ -58,29 +60,27 @@ static bool do_mount()
         if (sd.card()->readCID(&cid)) {
             return true;  // card still responding
         }
-        // Card removed — deassert CS and report immediately. Do NOT fall through
-        // to sd.begin(): it blocks for ~2s (SD_INIT_TIMEOUT) when no card is
-        // present, which is what caused the slow red transition. The next poll
-        // cycle will attempt remount naturally.
-        expander->digitalWrite(SD_CS, HIGH);
+
+        // Card removed — deassert CS and report immediately without trying to re-mount.
+        // Next poll cycle will try to re-mount automatically.
+        expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
         return false;
     }
 
     // Assert expander CS (active low) before starting transaction
-    expander->digitalWrite(SD_CS, LOW);
+    expander->digitalWrite(SD_EXPANDER_CS_PIN, LOW);
 
-    // SD_DUMMY_CS is passed to SdFat as its GPIO csPin, but actual CS is
+    // SD_DUMMY_GPIO is passed to SdFat as its GPIO csPin, but actual CS is
     // driven by the expander above. SHARED_SPI tells SdFat not to take
     // exclusive ownership of the bus.
-    SdSpiConfig cfg(SD_DUMMY_CS, SHARED_SPI, SD_SCK_MHZ(25), &SPI);
+    SdSpiConfig cfg(SD_DUMMY_GPIO, SHARED_SPI, SD_SCK_MHZ(25), &SPI);
     bool ok = sd.begin(cfg);
 
     if (!ok) {
         // Deassert CS on failure so the bus is released cleanly
-        expander->digitalWrite(SD_CS, HIGH);
+        expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
     }
 
-    Serial.printf("SD mount: %s\n", ok ? "OK" : "FAIL");
     return ok;
 }
 
