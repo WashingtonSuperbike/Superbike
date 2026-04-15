@@ -9,9 +9,12 @@
  *   - I2C helpers and BCD conversion functions are file-scoped static
  */
 
-#include <Wire.h>
+#include "driver/i2c.h"
 #include <Arduino.h>
 #include "rtc.h"
+
+#define RTC_I2C_PORT        I2C_NUM_0
+#define RTC_I2C_TIMEOUT_MS  pdMS_TO_TICKS(50)
 
 // ============================================================================
 // Type definitions
@@ -42,41 +45,24 @@ typedef struct {
 #define RTC_SECOND_ADDR     (0x04)
 
 // ============================================================================
-// Static I2C helpers (ported from Waveshare, Wire.begin stripped)
+// Static I2C helpers
 // ============================================================================
 
 static void DEV_I2C_Write_Byte(uint8_t addr, uint8_t reg, uint8_t Value) {
-    Wire.beginTransmission(addr);
-    Wire.write(reg);
-    Wire.write(Value);
-    Wire.endTransmission();
+    uint8_t buf[2] = {reg, Value};
+    i2c_master_write_to_device(RTC_I2C_PORT, addr, buf, sizeof(buf), RTC_I2C_TIMEOUT_MS);
 }
 
 static void DEV_I2C_Write_nByte(uint8_t addr, uint8_t *pData, uint32_t Len) {
-    Wire.beginTransmission(addr);
-    Wire.write(pData, Len);
-    Wire.endTransmission();
+    i2c_master_write_to_device(RTC_I2C_PORT, addr, pData, Len, RTC_I2C_TIMEOUT_MS);
 }
 
 static void DEV_I2C_Read_Byte(uint8_t addr, uint8_t reg, uint8_t *data) {
-    Wire.beginTransmission(addr);
-    Wire.write(reg);
-    Wire.endTransmission();
-
-    Wire.requestFrom(addr, (uint8_t)1);
-    *data = Wire.read();
+    i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, data, 1, RTC_I2C_TIMEOUT_MS);
 }
 
 static void DEV_I2C_Read_nByte(uint8_t addr, uint8_t reg, uint8_t *pData, uint32_t Len) {
-    Wire.beginTransmission(addr);
-    Wire.write(reg);
-    Wire.endTransmission();
-
-    Wire.requestFrom(addr, Len);
-
-    for (uint8_t i = 0; i < Len; i++) {
-        pData[i] = Wire.read();
-    }
+    i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, pData, Len, RTC_I2C_TIMEOUT_MS);
 }
 
 // ============================================================================
@@ -92,7 +78,7 @@ static int bcdToDec(uint8_t val) {
 }
 
 // ============================================================================
-// PCF85063A read function (ported from Waveshare, unchanged)
+// PCF85063A read function
 // ============================================================================
 
 static void PCF85063A_Read_now(datetime_t *time) {
@@ -112,9 +98,6 @@ static void PCF85063A_Read_now(datetime_t *time) {
 // ============================================================================
 
 void rtc_init() {
-    // Wire already initialized by board->begin() on SDA=8, SCL=9 @ 400kHz
-    // Do NOT call Wire.begin() — it would reinitialize the bus and potentially
-    // disrupt the CH422G expander that the LCD depends on.
     uint8_t value = RTC_CTRL_1_DEFAULT | RTC_CTRL_1_CAP_SEL;
     DEV_I2C_Write_Byte(PCF85063A_ADDRESS, RTC_CTRL_1_ADDR, value);
     Serial.println("RTC PCF85063A initialized (no Wire.begin)");
