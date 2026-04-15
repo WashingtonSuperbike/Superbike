@@ -334,6 +334,8 @@ void dashboard_refresh(const DashboardState &state)
 
     // -- Speed (needle + digital label) --
     int speed = rpm_to_mph(state.motor.RPM);
+    if (speed < 0)   speed = 0;
+    if (speed > 140) speed = 140;   // clamp to dial face max
     if (speed != prev_speed) {
         // Update the standalone needle line — only its narrow strip is redrawn
         float angle_deg = 255.0f + (float)speed * (210.0f / 140.0f);
