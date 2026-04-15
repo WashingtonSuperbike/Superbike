@@ -50,9 +50,16 @@ static bool do_mount()
 {
     auto expander = s_board->getIO_Expander()->getBase();
 
-    // Fast-path: card already mounted and healthy — skip re-init
+    // Fast-path: card claims to be mounted — probe it with a CID read to confirm
+    // it's physically present. errorCode() stays 0 even after card removal until
+    // an actual I/O is attempted, so we must probe rather than just check the code.
     if (sd.card() && sd.card()->errorCode() == 0) {
-        return true;
+        cid_t cid;
+        if (sd.card()->readCID(&cid)) {
+            return true;  // card still responding
+        }
+        // Card removed — deassert CS so the bus is clean for a remount attempt
+        expander->digitalWrite(SD_CS, HIGH);
     }
 
     // Assert expander CS (active low) before starting transaction

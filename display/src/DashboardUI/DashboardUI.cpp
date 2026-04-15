@@ -59,7 +59,7 @@ static int     prev_batt_mv       = -999; // (int)(voltage * 10)
 static int     prev_batt_pct      = -999;
 static int     prev_error_msg     = -1;
 static int     prev_bms_flag      = -1;
-static bool    prev_sd_started    = false;
+static bool    prev_sd_started    = true;   // force color update on first refresh
 
 // ============================================================================
 // PLACEHOLDER IMAGES
