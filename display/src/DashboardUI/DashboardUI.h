@@ -15,6 +15,7 @@
 
 #include <lvgl.h>
 #include <stdint.h>
+#include <atomic>
 #include "Config.h"
 #include "freertos/FreeRTOS.h"
 
@@ -100,7 +101,7 @@ struct DashboardState {
     DashboardBatteryVoltages  battery;
     DashboardGyroData         gyro;
     DashboardThermistorTemps  thermistors;
-    volatile bool sd_started;
+    std::atomic<bool> sd_started{};
 };
 
 // Spinlock protecting hv_cell_voltages[CONFIG_HV_CELL_COUNT].
