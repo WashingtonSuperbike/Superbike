@@ -22,6 +22,7 @@
 static SdFs   sd;
 static Board *s_board = nullptr;
 static bool   s_sd_ever_began = false;
+static FsFile s_log_file;
 
 void sd_init(Board *board)
 {
@@ -104,5 +105,29 @@ void sd_poll_task(void *param)
             state->sd_started = mounted;
             Serial.printf("SD state changed: %s\n", mounted ? "mounted" : "unmounted");
         }
+    }
+}
+
+bool sd_open_log_file(const char *filename) {
+    if (s_log_file.isOpen()) {
+        s_log_file.close();
+    }
+    return s_log_file.open(filename, O_WRONLY | O_CREAT | O_TRUNC);
+}
+
+bool sd_write_log_line(const char *buf, size_t len) {
+    if (!s_log_file.isOpen()) return false;
+    return (size_t)s_log_file.write(buf, len) == len;
+}
+
+bool sd_sync_log_file() {
+    if (!s_log_file.isOpen()) return false;
+    return s_log_file.sync();
+}
+
+void sd_close_log_file() {
+    if (s_log_file.isOpen()) {
+        s_log_file.sync();
+        s_log_file.close();
     }
 }
