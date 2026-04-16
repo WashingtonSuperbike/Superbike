@@ -13,19 +13,6 @@ static const uint32_t FLUSH_INTERVAL_MS = 10000;  // 10 s flush cadence (LOG-05)
 static const uint32_t LOG_INTERVAL_MS   = 50;     // 20 Hz write rate (LOG-04)
 
 // ============================================================================
-// Speed conversion constants (mirrored from DashboardUI.h)
-// ============================================================================
-#ifndef GEAR_RATIO
-#define GEAR_RATIO   (48.0f / 16.0f)
-#endif
-#ifndef WHEEL_DIAM_M
-#define WHEEL_DIAM_M 0.522f
-#endif
-#ifndef MPH_CONVERT
-#define MPH_CONVERT  2.2369362920544f
-#endif
-
-// ============================================================================
 // writeHeader — 42-column CSV header row (LOG-02, LOG-03)
 // ============================================================================
 static void writeHeader(FsFile &file)
