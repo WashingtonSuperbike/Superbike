@@ -1,6 +1,11 @@
 #include "CAN_Receive.h"
 
 // ---------------------------------------------------------------------------
+// Spinlock protecting DashboardBatteryVoltages.hv_cell_voltages writes/reads.
+// Extern declaration in DashboardUI.h; used by Logging/logging.cpp for reads.
+portMUX_TYPE g_cell_voltages_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// ---------------------------------------------------------------------------
 // Decode helpers — mirror mainboard/src/CAN/CAN.cpp with Dashboard types
 // ---------------------------------------------------------------------------
 
@@ -47,21 +52,24 @@ static void decipherCellsVoltage(twai_message_t msg, DashboardBatteryVoltages *b
         Serial.printf("Invalid CELL_VOLTAGES message length: %d\n", msg.data_length_code);
         return;
     }
-    static float hv_cell_voltages[CONFIG_HV_CELL_COUNT] = {};
 
     uint32_t msgID  = msg.identifier;
     int cellOffset  = (((msgID >> 8) & 0xF) - 0x9);
     int ltcOffset   = (msgID & 0x1);
     int totalOffset = (cellOffset * 4) + (ltcOffset * 12);
 
+    uint16_t *buf = (uint16_t *)msg.data;
+    taskENTER_CRITICAL(&g_cell_voltages_mux);
     for (int i = 0; i < 4; i++) {
-        uint16_t *buf = (uint16_t *)msg.data;
-        hv_cell_voltages[i + totalOffset] = ((float)buf[i]) / 10000.0f;
+        if (i + totalOffset < CONFIG_HV_CELL_COUNT) {
+            battery->hv_cell_voltages[i + totalOffset] = ((float)buf[i]) / 10000.0f;
+        }
     }
+    taskEXIT_CRITICAL(&g_cell_voltages_mux);
 
     float sum = 0.0f;
     for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
-        sum += hv_cell_voltages[i];
+        sum += battery->hv_cell_voltages[i];
     }
     battery->hv_series_voltage = sum;
 }

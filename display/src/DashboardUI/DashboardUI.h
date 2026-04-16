@@ -15,6 +15,8 @@
 
 #include <lvgl.h>
 #include <stdint.h>
+#include "Config.h"
+#include "freertos/FreeRTOS.h"
 
 // ============================================================================
 // DRIVE-TRAIN CONSTANTS (from old firmware, used for speed calculation)
@@ -74,6 +76,7 @@ struct DashboardBMSStatus {
 struct DashboardBatteryVoltages {
     float hv_series_voltage;
     float aux_battery_voltage;
+    float hv_cell_voltages[CONFIG_HV_CELL_COUNT];  // populated by CAN receive path only
 };
 
 struct DashboardGyroData {
@@ -99,6 +102,11 @@ struct DashboardState {
     DashboardThermistorTemps  thermistors;
     volatile bool sd_started;
 };
+
+// Spinlock protecting hv_cell_voltages[CONFIG_HV_CELL_COUNT].
+// Must be held by both the CAN write path and the logging read path.
+// Defined in CAN_Receive.cpp; used in Logging/logging.cpp.
+extern portMUX_TYPE g_cell_voltages_mux;
 
 // ============================================================================
 // WIDGET HANDLE STRUCT
