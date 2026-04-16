@@ -112,7 +112,10 @@ static bool do_mount()
 }
 
 SdFs& sd_get_fs() { return sd; }
-SemaphoreHandle_t sd_get_spi_mutex() { return spi_mutex; }
+SemaphoreHandle_t sd_get_spi_mutex() {
+    assert(spi_mutex != nullptr && "sd_get_spi_mutex() called before sd_init()");
+    return spi_mutex;
+}
 
 void sd_poll_task(void *param)
 {
