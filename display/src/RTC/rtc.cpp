@@ -17,7 +17,7 @@
 #include "rtc.h"
 
 #define RTC_I2C_PORT        I2C_NUM_0
-#define RTC_I2C_TIMEOUT_MS  pdMS_TO_TICKS(50)
+#define RTC_I2C_TIMEOUT_TICKS  pdMS_TO_TICKS(50)
 
 // ============================================================================
 // Type definitions
@@ -53,19 +53,19 @@ typedef struct {
 
 static esp_err_t DEV_I2C_Write_Byte(uint8_t addr, uint8_t reg, uint8_t Value) {
     uint8_t buf[2] = {reg, Value};
-    return i2c_master_write_to_device(RTC_I2C_PORT, addr, buf, sizeof(buf), RTC_I2C_TIMEOUT_MS);
+    return i2c_master_write_to_device(RTC_I2C_PORT, addr, buf, sizeof(buf), RTC_I2C_TIMEOUT_TICKS);
 }
 
 static esp_err_t DEV_I2C_Write_nByte(uint8_t addr, uint8_t *pData, uint32_t Len) {
-    return i2c_master_write_to_device(RTC_I2C_PORT, addr, pData, Len, RTC_I2C_TIMEOUT_MS);
+    return i2c_master_write_to_device(RTC_I2C_PORT, addr, pData, Len, RTC_I2C_TIMEOUT_TICKS);
 }
 
 static esp_err_t DEV_I2C_Read_Byte(uint8_t addr, uint8_t reg, uint8_t *data) {
-    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, data, 1, RTC_I2C_TIMEOUT_MS);
+    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, data, 1, RTC_I2C_TIMEOUT_TICKS);
 }
 
 static esp_err_t DEV_I2C_Read_nByte(uint8_t addr, uint8_t reg, uint8_t *pData, uint32_t Len) {
-    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, pData, Len, RTC_I2C_TIMEOUT_MS);
+    return i2c_master_write_read_device(RTC_I2C_PORT, addr, &reg, 1, pData, Len, RTC_I2C_TIMEOUT_TICKS);
 }
 
 // ============================================================================
