@@ -72,10 +72,11 @@ Plans:
   2. A new CSV file named from the RTC datetime is created at boot when the card is mounted; the first line is a header row with all column names matching LOG-03 (elapsed_ms, speed_mph, motor_rpm, motor_current_A, motor_temp_C, mc_temp_C, bms_voltage_V, aux_voltage_V, cell_01_V … cell_24_V, thermistor_01_C … thermistor_10_C)
   3. Rows are appended at 20 Hz (50 ms interval) with values read from DashboardState; after 10 seconds the file is flushed and remains readable on a PC as valid CSV
   4. Pulling the card while logging causes the task to stop writing without crashing the firmware; re-inserting the card causes logging to resume in a new file
-**Plans:** 1/1 plans complete
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 03-01-PLAN.md — Data model extension, SD accessors with SPI mutex, Logger task with RTC-named CSV files
+- [x] 03-02-PLAN.md — Gap closure: RTC compile-time fallback for battery-less PCF85063A
 
 ## Progress
 
@@ -86,4 +87,4 @@ Phases execute in numeric order: 2 -> 3
 |-------|-----------|----------------|--------|-----------|
 | 1. Speedometer Meter | v1.1 | 1/1 | Complete | 2026-04-03 |
 | 2. SD + RTC Hardware Bringup | v1.2 | 2/2 | Complete | 2026-04-15 |
-| 3. Data Model + Logging Task | v1.2 | 1/1 | Complete   | 2026-04-16 |
+| 3. Data Model + Logging Task | v1.2 | 2/2 | Complete   | 2026-04-16 |
