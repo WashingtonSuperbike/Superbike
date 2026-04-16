@@ -26,7 +26,7 @@ static const uint32_t LOG_INTERVAL_MS   = 50;     // 20 Hz write rate (LOG-04)
 #endif
 
 // ============================================================================
-// writeHeader — 34-column CSV header row (LOG-02, LOG-03)
+// writeHeader — 42-column CSV header row (LOG-02, LOG-03)
 // ============================================================================
 static void writeHeader(FsFile &file)
 {
@@ -44,7 +44,7 @@ static void writeHeader(FsFile &file)
 }
 
 // ============================================================================
-// writeRow — format one 34-column CSV data row (LOG-03, LOG-04)
+// writeRow — format one 42-column CSV data row (LOG-03, LOG-04)
 // ============================================================================
 static bool writeRow(FsFile &file, const DashboardState &state)
 {

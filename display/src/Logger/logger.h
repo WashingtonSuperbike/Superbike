@@ -2,7 +2,7 @@
 
 /**
  * FreeRTOS task: writes CSV telemetry rows at 20 Hz.
- * Creates a new datetime-named file on SD mount, writes a 34-column header,
+ * Creates a new datetime-named file on SD mount, writes a 42-column header,
  * logs data rows, flushes every 10s, and handles card removal gracefully.
  *
  * Pin to Core 0, priority 1. Pass DashboardState* as task parameter.
