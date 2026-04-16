@@ -68,6 +68,11 @@ static void simulationTask(void *param)
         // BMS: flag an error briefly every ~30 seconds
         dashState.bms.bms_status_flag = (((int)(t * 10) % 300) < 10) ? 1.0f : 0.0f;
 
+        // Cell voltages: 3.3-4.1V sweep with per-cell phase offset (D-03)
+        for (int i = 0; i < 24; i++) {
+            dashState.battery.hv_cell_voltages[i] = 3.7f + 0.4f * fabsf(sinf(t + i * 0.25f));
+        }
+
         // SD card: owned by sd_poll_task — do not set here
         // dashState.sd_started = true;
 
@@ -139,16 +144,16 @@ void setup()
         1
     );
 
-    // Simulation task: animates gauge values (disabled — real CAN data is used)
-    // xTaskCreatePinnedToCore(
-    //     simulationTask,
-    //     "dash_sim",
-    //     4096,
-    //     NULL,
-    //     1,
-    //     NULL,
-    //     0
-    // );
+    // Simulation task: animates gauge values including 24 cell voltages (D-03)
+    xTaskCreatePinnedToCore(
+        simulationTask,
+        "dash_sim",
+        4096,
+        NULL,
+        1,
+        NULL,
+        0
+    );
 
     xTaskCreatePinnedToCore(
         [](void *param) {

@@ -19,14 +19,18 @@
 // but refer to entirely different hardware resources — expander I/O vs ESP32 GPIO.
 #define SD_DUMMY_GPIO       4
 
-static SdFs   sd;
-static Board *s_board = nullptr;
-static bool   s_sd_ever_began = false;
-static FsFile s_log_file;
+static SdFs              sd;
+static Board            *s_board = nullptr;
+static bool              s_sd_ever_began = false;
+static FsFile            s_log_file;
+static SemaphoreHandle_t spi_mutex = nullptr;
 
 void sd_init(Board *board)
 {
     s_board = board;
+
+    // Create SPI bus mutex before any SPI operations (D-04)
+    spi_mutex = xSemaphoreCreateMutex();
 
     // Configure CH422G expander pin 4 (SD_EXPANDER_CS_PIN) as output, deasserted high
     auto expander = board->getIO_Expander()->getBase();
@@ -54,6 +58,14 @@ static bool do_mount()
 {
     auto expander = s_board->getIO_Expander()->getBase();
 
+    // Guard all SdFat I/O with the SPI mutex (D-04) — both sd_poll_task and
+    // logger_task share the bus; concurrent access corrupts transfers.
+    if (xSemaphoreTake(spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
+        return false;  // bus busy; caller retries next poll cycle
+    }
+
+    bool result = false;
+
     // Card claims to be mounted — probe it with a CID read to confirm
     // it's physically present. errorCode() stays 0 even after card removal until
     // an actual I/O is attempted, so we must probe rather than just check the code.
@@ -64,33 +76,39 @@ static bool do_mount()
     if (s_sd_ever_began && sd.card() && sd.card()->errorCode() == 0) {
         cid_t cid;
         if (sd.card()->readCID(&cid)) {
-            return true;  // card still responding
+            result = true;  // card still responding
+        } else {
+            // Card removed — deassert CS and report immediately without trying to re-mount.
+            // Next poll cycle will try to re-mount automatically.
+            expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
+            result = false;
         }
-
-        // Card removed — deassert CS and report immediately without trying to re-mount.
-        // Next poll cycle will try to re-mount automatically.
-        expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
-        return false;
-    }
-
-    // Assert expander CS (active low) before starting transaction
-    expander->digitalWrite(SD_EXPANDER_CS_PIN, LOW);
-
-    // SD_DUMMY_GPIO is passed to SdFat as its GPIO csPin, but actual CS is
-    // driven by the expander above. SHARED_SPI tells SdFat not to take
-    // exclusive ownership of the bus.
-    SdSpiConfig cfg(SD_DUMMY_GPIO, SHARED_SPI, SD_SCK_MHZ(25), &SPI);
-    bool ok = sd.begin(cfg);
-
-    if (ok) {
-        s_sd_ever_began = true;
     } else {
-        // Deassert CS on failure so the bus is released cleanly
-        expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
+        // Assert expander CS (active low) before starting transaction
+        expander->digitalWrite(SD_EXPANDER_CS_PIN, LOW);
+
+        // SD_DUMMY_GPIO is passed to SdFat as its GPIO csPin, but actual CS is
+        // driven by the expander above. SHARED_SPI tells SdFat not to take
+        // exclusive ownership of the bus.
+        SdSpiConfig cfg(SD_DUMMY_GPIO, SHARED_SPI, SD_SCK_MHZ(25), &SPI);
+        bool ok = sd.begin(cfg);
+
+        if (ok) {
+            s_sd_ever_began = true;
+            result = true;
+        } else {
+            // Deassert CS on failure so the bus is released cleanly
+            expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
+            result = false;
+        }
     }
 
-    return ok;
+    xSemaphoreGive(spi_mutex);
+    return result;
 }
+
+SdFs& sd_get_fs() { return sd; }
+SemaphoreHandle_t sd_get_spi_mutex() { return spi_mutex; }
 
 void sd_poll_task(void *param)
 {
