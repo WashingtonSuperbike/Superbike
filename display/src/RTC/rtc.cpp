@@ -158,10 +158,12 @@ void rtc_init() {
     DEV_I2C_Write_Byte(PCF85063A_ADDRESS, RTC_CTRL_1_ADDR, value);
     Serial.println("RTC PCF85063A initialized (no Wire.begin)");
 
-    // Detect uninitialized RTC: PCF85063A has no battery backup, so it
-    // resets to its power-on epoch (2000-01-01 00:00:00) on every boot.
-    // When year == 2000 we write compile-time datetime as a fallback so that
-    // CSV filenames reflect an approximate real date instead of 2000-01-01.
+    // PCF85063A has no battery backup, so year == 2000 always means the chip
+    // just reset to its power-on default (2000-01-01 00:00:00). We overwrite
+    // it unconditionally with compile-time as a fallback so CSV filenames
+    // reflect an approximate real date instead of 2000-01-01.
+    // (The false-positive if someone actually ran this on 2000-01-01 is
+    // acceptable given the no-battery-backup hardware design.)
     datetime_t now = {};
     esp_err_t err = PCF85063A_Read_now(&now);
     if (err == ESP_OK && now.year == 2000) {
