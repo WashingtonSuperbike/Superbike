@@ -48,9 +48,9 @@ static bool writeRow(FsFile &file, const DashboardState &state)
     char buf[512];
     int len = snprintf(buf, sizeof(buf),
         "%lu,%.2f,%.1f,%.2f,%.1f,%.1f,%.2f,%.2f,"
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
+        "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
+        "%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
         "%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
         (unsigned long)millis(),
         speed_mph,
