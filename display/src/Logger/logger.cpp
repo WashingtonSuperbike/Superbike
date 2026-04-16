@@ -40,7 +40,7 @@ static bool writeRow(FsFile &file, const DashboardState &state)
                       * (float)M_PI * WHEEL_DIAM_M / 60.0f * MPH_CONVERT;
 
     // Snapshot cell voltages under spinlock (written by CAN path, read here)
-    float cells[24];
+    float cells[CONFIG_HV_CELL_COUNT];
     taskENTER_CRITICAL(&g_cell_voltages_mux);
     memcpy(cells, state.battery.hv_cell_voltages, sizeof(cells));
     taskEXIT_CRITICAL(&g_cell_voltages_mux);
