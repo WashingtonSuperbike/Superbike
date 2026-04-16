@@ -46,7 +46,7 @@ static void writeHeader(FsFile &file)
 // ============================================================================
 // writeRow — format one 34-column CSV data row (LOG-03, LOG-04)
 // ============================================================================
-static void writeRow(FsFile &file, const DashboardState &state)
+static bool writeRow(FsFile &file, const DashboardState &state)
 {
     // Speed: RPM -> mph using drivetrain constants
     float speed_mph = state.motor.RPM / GEAR_RATIO
@@ -87,8 +87,9 @@ static void writeRow(FsFile &file, const DashboardState &state)
     );
 
     if (len > 0 && len < (int)sizeof(buf)) {
-        file.write(buf, (size_t)len);
+        return (size_t)file.write(buf, (size_t)len) == (size_t)len;
     }
+    return false;
 }
 
 // ============================================================================
@@ -142,15 +143,22 @@ void logger_task(void *param)
         if (file_open && sd_now) {
             SemaphoreHandle_t mtx = sd_get_spi_mutex();
             if (xSemaphoreTake(mtx, pdMS_TO_TICKS(10)) == pdTRUE) {
-                writeRow(logFile, *state);
-
-                // Flush every 10 s to persist data without thrashing (LOG-05)
-                uint32_t now = millis();
-                if ((now - last_flush_ms) >= FLUSH_INTERVAL_MS) {
-                    logFile.flush();
-                    last_flush_ms = now;
+                bool ok = writeRow(logFile, *state);
+                if (!ok) {
+                    // Write failed — card removed mid-session. Close the file so
+                    // sd_poll_task can acquire the mutex quickly and detect removal
+                    // via the errorCode fast path (avoids the 2s sd.begin() timeout).
+                    logFile.close();
+                    file_open = false;
+                    Serial.println("CSV log: write error, closing file");
+                } else {
+                    // Flush every 10 s to persist data without thrashing (LOG-05)
+                    uint32_t now = millis();
+                    if ((now - last_flush_ms) >= FLUSH_INTERVAL_MS) {
+                        logFile.flush();
+                        last_flush_ms = now;
+                    }
                 }
-
                 xSemaphoreGive(mtx);
             }
         }

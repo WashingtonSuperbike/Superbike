@@ -65,22 +65,27 @@ static bool do_mount()
 
     bool result = false;
 
-    // Card claims to be mounted — probe it with a CID read to confirm
-    // it's physically present. errorCode() stays 0 even after card removal until
-    // an actual I/O is attempted, so we must probe rather than just check the code.
-    // Only probe the existing mount state if sd.begin() has succeeded at least
-    // once. Without this guard, sd.card() may return a non-null internal pointer
-    // on a default-constructed SdFs object even before any successful begin(),
-    // which could skip the sd.begin() block and silently fail to mount.
-    if (s_sd_ever_began && sd.card() && sd.card()->errorCode() == 0) {
-        cid_t cid;
-        if (sd.card()->readCID(&cid)) {
-            result = true;  // card still responding
-        } else {
-            // Card removed — deassert CS and report immediately without trying to re-mount.
-            // Next poll cycle will try to re-mount automatically.
+    if (s_sd_ever_began && sd.card()) {
+        if (sd.card()->errorCode() != 0) {
+            // SdFat already has an I/O error — a concurrent write (logger_task)
+            // already proved the card is gone. Skip sd.begin() (it blocks ~2s when
+            // no card is present) and return false immediately.
+            // Reset so the next poll cycle attempts a clean remount via sd.begin().
             expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
+            s_sd_ever_began = false;
             result = false;
+        } else {
+            // No error yet — probe with a CID read to confirm physical presence.
+            // errorCode() stays 0 until an I/O is attempted, so we can't rely on it alone.
+            cid_t cid;
+            if (sd.card()->readCID(&cid)) {
+                result = true;  // card still responding
+            } else {
+                // Card removed — deassert CS, reset for clean remount next cycle.
+                expander->digitalWrite(SD_EXPANDER_CS_PIN, HIGH);
+                s_sd_ever_began = false;
+                result = false;
+            }
         }
     } else {
         // Assert expander CS (active low) before starting transaction
