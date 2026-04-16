@@ -69,9 +69,12 @@ static void simulationTask(void *param)
         dashState.bms.bms_status_flag = (((int)(t * 10) % 300) < 10) ? 1.0f : 0.0f;
 
         // Cell voltages: 3.3-4.1V sweep with per-cell phase offset (D-03)
-        for (int i = 0; i < 24; i++) {
+        // Hold spinlock while writing — logger_task reads under the same lock.
+        taskENTER_CRITICAL(&g_cell_voltages_mux);
+        for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
             dashState.battery.hv_cell_voltages[i] = 3.7f + 0.4f * fabsf(sinf(t + i * 0.25f));
         }
+        taskEXIT_CRITICAL(&g_cell_voltages_mux);
 
         // SD card: owned by sd_poll_task — do not set here
         // dashState.sd_started = true;
