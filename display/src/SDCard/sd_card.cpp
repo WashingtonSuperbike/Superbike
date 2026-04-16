@@ -59,7 +59,7 @@ static bool do_mount()
 
     // Guard all SdFat I/O with the SPI mutex (D-04) — both sd_poll_task and
     // logger_task share the bus; concurrent access corrupts transfers.
-    if (xSemaphoreTake(spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
+    if (xSemaphoreTake(spi_mutex, pdMS_TO_TICKS(200)) != pdTRUE) {
         return false;  // bus busy; caller retries next poll cycle
     }
 
