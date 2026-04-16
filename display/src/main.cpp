@@ -186,7 +186,7 @@ void setup()
     xTaskCreatePinnedToCore(
         logger_task,
         "csv_log",
-        4096,
+        8192,   // snprintf(512) + SdFat write cache exceeds 4K under worst-case alignment
         &dashState,
         1,
         NULL,
