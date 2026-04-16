@@ -17,6 +17,7 @@
 #include "CAN/CAN_Receive.h"
 #include "SDCard/sd_card.h"
 #include "RTC/rtc.h"
+#include "Logging/logging.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -174,6 +175,17 @@ void setup()
         1,
         NULL,
         0   // Core 0 — avoids SPI contention with LVGL on Core 1
+    );
+
+    // CSV logging task: writes telemetry at 20 Hz, polls sd_started for card events
+    xTaskCreatePinnedToCore(
+        loggingTask,
+        "csv_log",
+        8192,           // larger stack — snprintf(512) + SdFat write cache
+        &dashState,
+        1,
+        NULL,
+        0   // Core 0 — SdFat must not contend with LVGL on Core 1
     );
 
     Serial.println("Dashboard running");
