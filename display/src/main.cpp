@@ -17,7 +17,7 @@
 #include "CAN/CAN_Receive.h"
 #include "SDCard/sd_card.h"
 #include "RTC/rtc.h"
-#include "Logging/logging.h"
+#include "Logger/logger.h"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -184,9 +184,9 @@ void setup()
 
     // CSV logging task: writes telemetry at 20 Hz, polls sd_started for card events
     xTaskCreatePinnedToCore(
-        loggingTask,
+        logger_task,
         "csv_log",
-        8192,           // larger stack — snprintf(512) + SdFat write cache
+        4096,
         &dashState,
         1,
         NULL,
