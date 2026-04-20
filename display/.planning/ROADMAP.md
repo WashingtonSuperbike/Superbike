@@ -44,7 +44,11 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
   3. Disconnecting the CAN bus while running: can_icon turns yellow after 3 seconds of silence, then red if TWAI escalates to error-passive or bus-off
   4. On TWAI_ALERT_BUS_OFF: the driver calls twai_initiate_recovery() + twai_start() and resumes receiving frames without a firmware restart
   5. On TWAI_ALERT_ERR_PASS: the driver calls twai_stop() / uninstall / install / start and resumes receiving frames without a firmware restart
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 04-01-PLAN.md — DashboardUI.h data model: CanStatus enum, can_status atomic field, can_icon widget rename
+- [ ] 04-02-PLAN.md — DashboardUI.cpp can_icon creation and 3-way color refresh logic
+- [ ] 04-03-PLAN.md — CAN_Receive.cpp recovery sequences, watchdog, alert mask; main.cpp stack bump
 **UI hint**: yes
 
 ## Progress
@@ -54,4 +58,4 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 | 1. Speedometer Meter | v1.1 | 1/1 | Complete | 2026-04-03 |
 | 2. SD + RTC Hardware Bringup | v1.2 | 2/2 | Complete | 2026-04-15 |
 | 3. Data Model + Logging Task | v1.2 | 2/2 | Complete | 2026-04-16 |
-| 4. CAN Health Status + Auto-Recovery | v1.3 | 0/? | Not started | - |
+| 4. CAN Health Status + Auto-Recovery | v1.3 | 0/3 | Not started | - |
