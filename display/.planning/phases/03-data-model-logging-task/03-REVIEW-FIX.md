@@ -1,69 +1,69 @@
 ---
 phase: 03-data-model-logging-task
-fixed_at: 2026-04-15T00:00:00Z
+fixed_at: 2026-04-16T17:12:20Z
 review_path: .planning/phases/03-data-model-logging-task/03-REVIEW.md
-iteration: 1
+iteration: 3
 findings_in_scope: 5
 fixed: 4
 skipped: 1
 status: partial
 ---
 
-# Phase 03: Code Review Fix Report
+# Phase 03: Code Review Fix Report (Iteration 3)
 
-**Fixed at:** 2026-04-15
+**Fixed at:** 2026-04-16T17:12:20Z
 **Source review:** .planning/phases/03-data-model-logging-task/03-REVIEW.md
-**Iteration:** 1
+**Iteration:** 3
 
 **Summary:**
-- Findings in scope: 5 (CR-01, WR-01, WR-02, WR-03, WR-04)
+- Findings in scope: 5
 - Fixed: 4
-- Skipped: 1
+- Skipped: 1 (WR-01 already applied in prior pass)
 
 ## Fixed Issues
 
-### CR-01: `sd_started` Written and Read Across Cores Without Atomic Protection
+### IN-01: `RTC_I2C_TIMEOUT_MS` Macro Name Implies Milliseconds but Holds Ticks
 
-**Files modified:** `src/DashboardUI/DashboardUI.h`
-**Commit:** e4eb211
-**Applied fix:** Added `#include <atomic>` and changed `volatile bool sd_started;` to `std::atomic<bool> sd_started{};` in `DashboardState`. All existing read sites (implicit bool conversion in logger.cpp and sd_card.cpp) and write sites (atomic assignment) remain valid with no further changes required.
-
----
-
-### WR-02: CSV Header Has 42 Columns But Comments Say 34
-
-**Files modified:** `src/Logger/logger.h`, `src/Logger/logger.cpp`
-**Commit:** 974931b
-**Applied fix:** Updated three stale "34-column" comments to "42-column" — the docblock in logger.h, the `writeHeader` section comment in logger.cpp, and the `writeRow` section comment in logger.cpp.
+**Files modified:** `src/RTC/rtc.cpp`
+**Commit:** `0c0a799`
+**Applied fix:** Renamed `RTC_I2C_TIMEOUT_MS` to `RTC_I2C_TIMEOUT_TICKS` at the macro definition and updated all four call sites (`DEV_I2C_Write_Byte`, `DEV_I2C_Write_nByte`, `DEV_I2C_Read_Byte`, `DEV_I2C_Read_nByte`) to use the new name. The macro value (`pdMS_TO_TICKS(50)`) is unchanged.
 
 ---
 
-### WR-03: Duplicate `GEAR_RATIO`/`WHEEL_DIAM_M`/`MPH_CONVERT` Macros in logger.cpp
+### IN-02: Year-2000 Heuristic in `rtc_init()` Has a False-Positive Edge Case
 
-**Files modified:** `src/Logger/logger.cpp`
-**Commit:** d6336ff
-**Applied fix:** Removed the entire `#ifndef`-guarded duplicate macro block (lines 15–26 in the pre-fix file). The three constants are already defined in `DashboardUI/DashboardUI.h` which is included above, making the local copies dead code. `DashboardUI.h` is now the single source of truth.
+**Files modified:** `src/RTC/rtc.cpp`
+**Commit:** `bd00d02`
+**Applied fix:** Replaced the brief comment above the `year == 2000` check with an expanded block that explicitly documents: (1) the PCF85063A has no battery backup so year==2000 always means a power-on reset, (2) the overwrite is unconditional by design, and (3) the theoretical false-positive on an actual 2000-01-01 boot is acceptable for this hardware. The code itself is unchanged.
 
 ---
 
-### WR-04: `do_mount()` Mutex Timeout Too Short — Transient Contention Triggers Spurious Unmount
+### IN-03: `simulationTask` Writes `hv_cell_voltages` Without the Spinlock Used by Logger
+
+**Files modified:** `src/main.cpp`
+**Commit:** `67232cd`
+**Applied fix:** Wrapped the cell voltage write loop in `taskENTER_CRITICAL(&g_cell_voltages_mux)` / `taskEXIT_CRITICAL(&g_cell_voltages_mux)`. Also updated the hardcoded loop bound `24` to `CONFIG_HV_CELL_COUNT` for consistency with the WR-01 fix already applied to logger.cpp.
+
+---
+
+### IN-04: `sd_get_spi_mutex()` Returns `nullptr` If Called Before `sd_init()`
 
 **Files modified:** `src/SDCard/sd_card.cpp`
-**Commit:** e690745
-**Applied fix:** Increased the `xSemaphoreTake` timeout in `do_mount()` from `pdMS_TO_TICKS(50)` to `pdMS_TO_TICKS(200)`. This ensures transient SdFat write activity by logger_task (which can hold the mutex for the duration of a sector write) does not cause `do_mount` to return false and trigger a spurious `sd_started = false` in `sd_poll_task`.
+**Commit:** `4f01f08`
+**Applied fix:** Expanded `sd_get_spi_mutex()` from a one-liner to a guarded body with `assert(spi_mutex != nullptr && "sd_get_spi_mutex() called before sd_init()")` before the return, so pre-init calls produce an immediate diagnosable crash rather than a silent FreeRTOS fault from `xSemaphoreTake(nullptr, ...)`.
 
 ---
 
 ## Skipped Issues
 
-### WR-01: Card-Removal Branch Does Not Set `file_open = false` When Mutex Take Fails
+### WR-01: Hardcoded Cell Count `24` in `logger.cpp` Should Use `CONFIG_HV_CELL_COUNT`
 
-**File:** `src/Logger/logger.cpp:130-140`
-**Reason:** Code already correct — the current source already places `file_open = false` unconditionally outside the `xSemaphoreTake` success block. The reviewer described a version where it was inside the block, but in the actual file `file_open = false` appears at the same indentation level as the `if (xSemaphoreTake(...))` block, executing regardless of mutex acquisition outcome. No change needed.
-**Original issue:** If mutex take fails during card-removal detection, `file_open` would remain true, leaking the file handle until the next insertion event.
+**File:** `src/Logger/logger.cpp:43`
+**Reason:** Already applied in a prior pass (iteration 2, commit a617f6a). Current code at line 43 reads `float cells[CONFIG_HV_CELL_COUNT];` — the fix is fully in place and no change was needed.
+**Original issue:** Local snapshot array and `memcpy` were hardcoded to 24 elements instead of using `CONFIG_HV_CELL_COUNT`, creating a silent mismatch risk if pack size changes.
 
 ---
 
-_Fixed: 2026-04-15_
+_Fixed: 2026-04-16T17:12:20Z_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 3_
