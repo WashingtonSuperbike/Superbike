@@ -183,7 +183,7 @@ void waveshare_twai_receive(DashboardState *state)
         if (twai_initiate_recovery() == ESP_OK) {
             if (twai_start() == ESP_OK) {
                 Serial.println("TWAI bus-off recovery complete.");
-                state->can_status.store(CanStatus::NO_DATA);   // D-09: NO_DATA after successful restart
+                state->can_status.store(CanStatus::BOOT);   // D-09: BOOT after successful restart
             } else {
                 Serial.println("TWAI twai_start() failed after bus-off recovery.");
             }
@@ -201,7 +201,7 @@ void waveshare_twai_receive(DashboardState *state)
         if (twai_driver_install(&s_g_config, &s_t_config, &s_f_config) == ESP_OK) {
             if (twai_start() == ESP_OK) {
                 Serial.println("TWAI driver reinstalled after ERR_PASS.");
-                state->can_status.store(CanStatus::NO_DATA);   // D-09: NO_DATA after successful restart
+                state->can_status.store(CanStatus::BOOT);   // D-09: BOOT after successful restart
                 // Re-enable alerts — they are cleared by uninstall/reinstall cycle
                 uint32_t alerts_to_enable = TWAI_ALERT_RX_DATA | TWAI_ALERT_ERR_PASS
                                           | TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_QUEUE_FULL
@@ -241,11 +241,11 @@ void waveshare_twai_receive(DashboardState *state)
         }
     }
 
-    // -- No-data watchdog: 3 s silence demotes RECEIVING → NO_DATA (CANU-04, D-03) --
+    // -- No-data watchdog: 1 s silence demotes RECEIVING → TIMEOUT (CANU-04, D-03) --
     // Only demote from RECEIVING — do not mask an active ERR_PASSIVE or BUS_OFF status.
     if (state->can_status.load() == CanStatus::RECEIVING &&
         last_rx_ms != 0 &&
-        (millis() - last_rx_ms) > 3000U) {
-        state->can_status.store(CanStatus::NO_DATA);
+        (millis() - last_rx_ms) > 1000U) {
+        state->can_status.store(CanStatus::TIMEOUT);
     }
 }

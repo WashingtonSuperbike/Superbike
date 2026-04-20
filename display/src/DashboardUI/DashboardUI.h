@@ -20,6 +20,11 @@
 #include "freertos/FreeRTOS.h"
 
 // ============================================================================
+// SYMBOLS
+// ============================================================================
+#define LV_SYMBOL_CAN_LINK "\xEF\x83\x81"
+
+// ============================================================================
 // DRIVE-TRAIN CONSTANTS (from old firmware, used for speed calculation)
 // ============================================================================
 
@@ -43,7 +48,7 @@
 // ============================================================================
 
 #ifndef DASHBOARD_THERMISTOR_COUNT
-#define DASHBOARD_THERMISTOR_COUNT 10
+#define DASHBOARD_THERMISTOR_COUNT CONFIG_THERMISTOR_COUNT
 #endif
 
 // ============================================================================
@@ -92,12 +97,13 @@ struct DashboardThermistorTemps {
 
 // CAN bus health state — updated atomically by CAN_Receive task, read by dashboard task.
 // Underlying type uint8_t guarantees lock-free std::atomic on Xtensa/ESP32-S3.
-// NO_DATA = 0 so brace-initialisation of std::atomic<CanStatus>{} gives the correct boot default.
+// BOOT = 0 so brace-initialisation of std::atomic<CanStatus>{} gives the correct default.
 enum class CanStatus : uint8_t {
-    NO_DATA     = 0,   // driver running, no decoded frame received yet (boot default)
-    RECEIVING   = 1,   // at least one frame decoded within the last 3 s
-    ERR_PASSIVE = 2,   // TWAI entered error-passive; recovery in progress
-    BUS_OFF     = 3,   // TWAI bus-off; recovery in progress
+    BOOT        = 0,   // driver running, no decoded frame received yet (boot default)
+    RECEIVING   = 1,   // at least one frame decoded within the last 1 s
+    TIMEOUT     = 2,   // no frame decoded in last 1 s (after initial contact)
+    ERR_PASSIVE = 3,   // TWAI entered error-passive; recovery in progress
+    BUS_OFF     = 4,   // TWAI bus-off; recovery in progress
 };
 
 /**

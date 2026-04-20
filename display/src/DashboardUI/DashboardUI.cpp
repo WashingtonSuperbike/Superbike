@@ -36,6 +36,7 @@
 #define CLR_GYRO        lv_color_make(0xBD, 0xBD, 0xBD)  // ~0xBDF7 grey
 #define CLR_WARN_RED    lv_color_make(0xF8, 0x20, 0x00)
 #define CLR_WARN_YELLOW lv_color_make(0xFE, 0xE0, 0x00)
+#define CLR_DISABLED    lv_color_make(0x80, 0x80, 0x80)  // gray for boot/inactive
 #define CLR_LOGO        lv_color_make(0x4B, 0x2C, 0x92)  // purple
 #define CLR_MOTORING    lv_color_make(0x00, 0x80, 0xFF)  // blue (motoring / positive current)
 #define CLR_REGEN       lv_color_make(0x00, 0xC8, 0x00)  // green (regen / negative current)
@@ -60,7 +61,7 @@ static int     prev_batt_pct      = -999;
 static int     prev_error_msg     = -1;
 static int     prev_bms_flag      = -1;
 static bool    prev_sd_started    = true;   // force color update on first refresh
-static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push on first refresh (sentinel != boot NO_DATA)
+static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push on first refresh (sentinel != boot BOOT)
 
 // ============================================================================
 // PLACEHOLDER IMAGES
@@ -83,20 +84,30 @@ static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push o
  * placeholder text in labels styled to look like icons.
  */
 
+// Superbike logo
+LV_IMG_DECLARE(logo55);
+
+// Speedometer dial face
+LV_IMG_DECLARE(dial_face);
+
 // Include the large font for digital speed readout
 LV_FONT_DECLARE(lv_font_montserrat_144);
+
+// Add a link symbol for CAN status (0xF381 in can_link.c)
+LV_FONT_DECLARE(can_link);
 
 // ============================================================================
 // HELPER: create a small "icon" label using LV_SYMBOL_* placeholder text
 // ============================================================================
 
 static lv_obj_t *create_icon_label(lv_obj_t *parent, const char *symbol,
-                                   lv_color_t color, lv_coord_t x, lv_coord_t y)
+                                   lv_color_t color, lv_coord_t x, lv_coord_t y,
+                                   const lv_font_t *font = &lv_font_montserrat_20)
 {
     lv_obj_t *lbl = lv_label_create(parent);
     lv_label_set_text(lbl, symbol);
     lv_obj_set_style_text_color(lbl, color, 0);
-    lv_obj_set_style_text_font(lbl, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(lbl, font, 0);
     lv_obj_set_pos(lbl, x, y);
     return lbl;
 }
@@ -150,7 +161,6 @@ void dashboard_create(void)
     // -- SPEEDOMETER DIAL (static pre-rendered image) --
     // Tick marks and labels are baked into a 430x430 RGB565 image to avoid
     // redrawing 141 ticks every frame (the main FPS bottleneck with lv_meter).
-    LV_IMG_DECLARE(dial_face);
     w.dial_img = lv_img_create(scr);
     lv_img_set_src(w.dial_img, &dial_face);
     lv_obj_set_pos(w.dial_img, 35, 15);
@@ -267,41 +277,34 @@ void dashboard_create(void)
 
     // -- BOTTOM STRIP --
 
-    // Stopwatch (bottom-left)
-    // w.stopwatch_label = lv_label_create(scr);
-    // lv_label_set_text(w.stopwatch_label, "00:00.00");
-    // lv_obj_set_style_text_color(w.stopwatch_label, CLR_FG, 0);
-    // lv_obj_set_style_text_font(w.stopwatch_label, &lv_font_montserrat_30, 0);
-    // lv_obj_set_pos(w.stopwatch_label, 15, 410);
-
     // Status icons row
     lv_coord_t icon_y = 445;
     w.sd_icon           = create_icon_label(scr, LV_SYMBOL_SD_CARD,  CLR_FG,          15,  icon_y);
-    w.can_icon          = create_icon_label(scr, LV_SYMBOL_WIFI,     CLR_WARN_YELLOW, 50,  icon_y);
+    w.can_icon          = create_icon_label(scr, LV_SYMBOL_CAN_LINK, CLR_DISABLED,    50,  icon_y, &can_link);
     w.temp_warning_icon = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_RED,    90,  icon_y);
     w.warning_icon      = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_YELLOW, 125, icon_y);
     w.info_icon         = create_icon_label(scr, LV_SYMBOL_LIST,     CLR_WARN_YELLOW, 160, icon_y);
 
     // Logo placeholder (centre-bottom)
-    w.logo_icon = lv_label_create(scr);
-    lv_label_set_text(w.logo_icon, "UW");
-    lv_obj_set_style_text_color(w.logo_icon, CLR_LOGO, 0);
-    lv_obj_set_style_text_font(w.logo_icon, &lv_font_montserrat_24, 0);
-    lv_obj_set_pos(w.logo_icon, 380, 440);
+    w.logo_icon = lv_img_create(scr);
+    lv_img_set_src(w.logo_icon, &logo55);
+    lv_obj_set_style_img_recolor(w.logo_icon, CLR_LOGO, 0);
+    lv_obj_set_style_img_recolor_opa(w.logo_icon, LV_OPA_COVER, 0);
+    lv_obj_align(w.logo_icon, LV_ALIGN_BOTTOM_MID, 0, -15);
 
     // Error message (centre-bottom, above icons)
     w.error_label = lv_label_create(scr);
     lv_label_set_text(w.error_label, "");
     lv_obj_set_style_text_color(w.error_label, CLR_WARN_RED, 0);
     lv_obj_set_style_text_font(w.error_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(w.error_label, 450, 410);
+    lv_obj_set_pos(w.error_label, 500, 410);
 
     // BMS status
     w.bms_status_label = lv_label_create(scr);
     lv_label_set_text(w.bms_status_label, "BMS: OK");
     lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
     lv_obj_set_style_text_font(w.bms_status_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(w.bms_status_label, 450, 435);
+    lv_obj_set_pos(w.bms_status_label, 500, 435);
 
     // Battery voltage + percentage (bottom-right)
     w.batt_voltage_label = lv_label_create(scr);
@@ -487,8 +490,10 @@ void dashboard_refresh(const DashboardState &state)
         lv_color_t can_color;
         if (can_st == CanStatus::RECEIVING) {
             can_color = CLR_RPM_ARC;       // green — actively receiving frames
-        } else if (can_st == CanStatus::NO_DATA) {
-            can_color = CLR_WARN_YELLOW;   // yellow — no frame in last 3 s
+        } else if (can_st == CanStatus::TIMEOUT) {
+            can_color = CLR_WARN_YELLOW;   // yellow — no frame in last 1 s (after contact)
+        } else if (can_st == CanStatus::BOOT) {
+            can_color = CLR_DISABLED;      // gray — waiting for first frame
         } else {
             can_color = CLR_WARN_RED;      // red — ERR_PASSIVE or BUS_OFF
         }
