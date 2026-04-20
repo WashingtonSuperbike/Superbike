@@ -1,13 +1,13 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: TBD
-status: planning
-stopped_at: v1.2 milestone archived 2026-04-19
+milestone_name: CAN Bus Integration
+status: in_progress
+stopped_at: Roadmap created — Phase 4 defined, ready for plan-phase
 last_updated: "2026-04-19T00:00:00.000Z"
 last_activity: 2026-04-19
 progress:
-  total_phases: 0
+  total_phases: 1
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-19)
 
 **Core value:** A self-contained display module that compiles, runs on hardware, and logs all telemetry to SD — the foundation everything else builds on.
-**Current focus:** Planning v1.3 — CAN bus integration
+**Current focus:** v1.3 CAN Bus Integration — Phase 4: CAN Health Status + Auto-Recovery
 
 ## Current Position
 
-Phase: N/A (between milestones)
-Plan: N/A
-Status: v1.2 archived — ready for /gsd-new-milestone
-Last activity: 2026-04-16
+Phase: 4 — CAN Health Status + Auto-Recovery
+Plan: — (not yet planned)
+Status: Roadmap created, awaiting /gsd-plan-phase 4
+Last activity: 2026-04-19 — Roadmap defined for v1.3
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -79,6 +79,7 @@ Recent decisions affecting current work:
 - [Phase 03-data-model-logging-task]: loggingTask (Logging/) replaced by logger_task (Logger/) in main.cpp; old module stays in source tree but not spawned
 - [Phase 03]: PCF85063A epoch-reset fixed via compile-time __DATE__/__TIME__ fallback written in rtc_init() when year==2000 detected; no battery backup on chip
 - [Phase 03]: PCF85063A_Write_now sends register address + 7 BCD bytes in single I2C transaction using chip auto-increment protocol
+- [v1.3 roadmap]: Single phase covers all 7 v1.3 requirements — UI state model (CANU) and TWAI recovery (CANR) are logically independent but small enough to deliver together; CANR-03 depends on CANU-01's can_status field
 
 ### Pending Todos
 
@@ -91,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T07:18:20.020Z
-Stopped at: Completed 03-02-PLAN.md (all tasks)
+Last session: 2026-04-19
+Stopped at: Roadmap created for v1.3. Phase 4 defined with 7 requirements (CANU-01 through CANU-04, CANR-01 through CANR-03).
 Resume file: None

@@ -5,7 +5,7 @@
 - ✅ **v1.0 Build & Flash** — Phase 1 (hardware bringup complete, 2026-04-03)
 - ✅ **v1.1 Speedometer Dial** — Phase 1 (lv_meter speedometer complete, 2026-04-03)
 - ✅ **v1.2 SD Card Support** — Phases 2-3 (shipped 2026-04-16)
-- 📋 **v1.3** — TBD (planned)
+- 📋 **v1.3 CAN Bus Integration** — Phase 4 (planned)
 
 ---
 
@@ -28,9 +28,24 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 </details>
 
-### 📋 v1.3 (Planned)
+### 📋 v1.3 CAN Bus Integration (Planned)
 
-- [ ] Phase 4: TBD
+- [ ] **Phase 4: CAN Health Status + Auto-Recovery** - Surface bus health on the dashboard and auto-recover from TWAI fault states
+
+## Phase Details
+
+### Phase 4: CAN Health Status + Auto-Recovery
+**Goal**: The dashboard reflects live CAN bus health and the TWAI driver recovers automatically from error-passive and bus-off faults
+**Depends on**: Phase 3 (DashboardState data model, LVGL dashboard widget infrastructure)
+**Requirements**: CANU-01, CANU-02, CANU-03, CANU-04, CANR-01, CANR-02, CANR-03
+**Success Criteria** (what must be TRUE):
+  1. The dashboard displays a can_icon that is green when CAN messages are actively arriving, yellow when no message has arrived in 3 seconds, and red when the bus is in error-passive or bus-off state
+  2. Riding with a live CAN bus: can_icon turns green within one message interval and stays green while traffic flows
+  3. Disconnecting the CAN bus while running: can_icon turns yellow after 3 seconds of silence, then red if TWAI escalates to error-passive or bus-off
+  4. On TWAI_ALERT_BUS_OFF: the driver calls twai_initiate_recovery() + twai_start() and resumes receiving frames without a firmware restart
+  5. On TWAI_ALERT_ERR_PASS: the driver calls twai_stop() / uninstall / install / start and resumes receiving frames without a firmware restart
+**Plans**: TBD
+**UI hint**: yes
 
 ## Progress
 
@@ -39,3 +54,4 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 | 1. Speedometer Meter | v1.1 | 1/1 | Complete | 2026-04-03 |
 | 2. SD + RTC Hardware Bringup | v1.2 | 2/2 | Complete | 2026-04-15 |
 | 3. Data Model + Logging Task | v1.2 | 2/2 | Complete | 2026-04-16 |
+| 4. CAN Health Status + Auto-Recovery | v1.3 | 0/? | Not started | - |
