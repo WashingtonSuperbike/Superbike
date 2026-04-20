@@ -90,6 +90,16 @@ struct DashboardThermistorTemps {
     float temps[DASHBOARD_THERMISTOR_COUNT];
 };
 
+// CAN bus health state — updated atomically by CAN_Receive task, read by dashboard task.
+// Underlying type uint8_t guarantees lock-free std::atomic on Xtensa/ESP32-S3.
+// NO_DATA = 0 so brace-initialisation of std::atomic<CanStatus>{} gives the correct boot default.
+enum class CanStatus : uint8_t {
+    NO_DATA     = 0,   // driver running, no decoded frame received yet (boot default)
+    RECEIVING   = 1,   // at least one frame decoded within the last 3 s
+    ERR_PASSIVE = 2,   // TWAI entered error-passive; recovery in progress
+    BUS_OFF     = 3,   // TWAI bus-off; recovery in progress
+};
+
 /**
  * Single struct holding every value the dashboard can display.
  * Populate from CAN, serial, or simulation — the UI doesn't care.
