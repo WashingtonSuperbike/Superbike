@@ -5,7 +5,7 @@
 - ✅ **v1.0 Build & Flash** — Phase 1 (hardware bringup complete, 2026-04-03)
 - ✅ **v1.1 Speedometer Dial** — Phase 1 (lv_meter speedometer complete, 2026-04-03)
 - ✅ **v1.2 SD Card Support** — Phases 2-3 (shipped 2026-04-16)
-- 📋 **v1.3 CAN Bus Integration** — Phase 4 (planned)
+- ✅ **v1.3 CAN Bus Integration** — Phase 4 (shipped 2026-04-20)
 
 ---
 
@@ -28,9 +28,12 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 </details>
 
-### 📋 v1.3 CAN Bus Integration (Planned)
+<details>
+<summary>✅ v1.3 CAN Bus Integration (Phase 4) — SHIPPED 2026-04-20</summary>
 
-- [ ] **Phase 4: CAN Health Status + Auto-Recovery** - Surface bus health on the dashboard and auto-recover from TWAI fault states
+- [x] Phase 4: CAN Health Status + Auto-Recovery (3/3 plans) — completed 2026-04-20
+
+</details>
 
 ## Phase Details
 
@@ -46,9 +49,9 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
   5. On TWAI_ALERT_ERR_PASS: the driver calls twai_stop() / uninstall / install / start and resumes receiving frames without a firmware restart
 **Plans**: 3 plans
 Plans:
-- [ ] 04-01-PLAN.md — DashboardUI.h data model: CanStatus enum, can_status atomic field, can_icon widget rename
-- [ ] 04-02-PLAN.md — DashboardUI.cpp can_icon creation and 3-way color refresh logic
-- [ ] 04-03-PLAN.md — CAN_Receive.cpp recovery sequences, watchdog, alert mask; main.cpp stack bump
+- [x] 04-01-PLAN.md — DashboardUI.h data model: CanStatus enum, can_status atomic field, can_icon widget rename
+- [x] 04-02-PLAN.md — DashboardUI.cpp can_icon creation and 3-way color refresh logic
+- [x] 04-03-PLAN.md — CAN_Receive.cpp recovery sequences, watchdog, alert mask; main.cpp stack bump
 **UI hint**: yes
 
 ## Progress
@@ -58,4 +61,4 @@ Plans:
 | 1. Speedometer Meter | v1.1 | 1/1 | Complete | 2026-04-03 |
 | 2. SD + RTC Hardware Bringup | v1.2 | 2/2 | Complete | 2026-04-15 |
 | 3. Data Model + Logging Task | v1.2 | 2/2 | Complete | 2026-04-16 |
-| 4. CAN Health Status + Auto-Recovery | v1.3 | 0/3 | Not started | - |
+| 4. CAN Health Status + Auto-Recovery | v1.3 | 3/3 | Complete | 2026-04-20 |

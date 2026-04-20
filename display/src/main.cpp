@@ -148,15 +148,15 @@ void setup()
     );
 
     // Simulation task: animates gauge values including 24 cell voltages (D-03)
-    xTaskCreatePinnedToCore(
-        simulationTask,
-        "dash_sim",
-        4096,
-        NULL,
-        1,
-        NULL,
-        0
-    );
+    // xTaskCreatePinnedToCore(
+    //     simulationTask,
+    //     "dash_sim",
+    //     4096,
+    //     NULL,
+    //     1,
+    //     NULL,
+    //     0
+    // );
 
     xTaskCreatePinnedToCore(
         [](void *param) {
@@ -167,7 +167,7 @@ void setup()
             }
         },
         "twai_recv",
-        4096,
+        6144,   // bumped from 4096: recovery sequences (stop/uninstall/install/start/reconfigure_alerts) add stack depth
         &dashState,
         1,
         NULL,
