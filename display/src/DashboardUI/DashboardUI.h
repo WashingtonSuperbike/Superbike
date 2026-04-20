@@ -111,7 +111,8 @@ struct DashboardState {
     DashboardBatteryVoltages  battery;
     DashboardGyroData         gyro;
     DashboardThermistorTemps  thermistors;
-    std::atomic<bool> sd_started{};
+    std::atomic<bool>      sd_started{};
+    std::atomic<CanStatus> can_status{};  // D-01: lock-free CAN health state; default NO_DATA (ordinal 0)
 };
 
 // Spinlock protecting hv_cell_voltages[CONFIG_HV_CELL_COUNT].
@@ -160,7 +161,7 @@ struct DashboardWidgets {
 
     // Status icons (bottom strip)
     lv_obj_t *sd_icon;
-    lv_obj_t *wifi_icon;
+    lv_obj_t *can_icon;   // D-10: replaces wifi_icon; same x=50 position in status strip
     lv_obj_t *warning_icon;
     lv_obj_t *info_icon;
     lv_obj_t *temp_warning_icon;
