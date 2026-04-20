@@ -60,6 +60,7 @@ static int     prev_batt_pct      = -999;
 static int     prev_error_msg     = -1;
 static int     prev_bms_flag      = -1;
 static bool    prev_sd_started    = true;   // force color update on first refresh
+static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push on first refresh (sentinel != boot NO_DATA)
 
 // ============================================================================
 // PLACEHOLDER IMAGES
@@ -276,7 +277,7 @@ void dashboard_create(void)
     // Status icons row
     lv_coord_t icon_y = 445;
     w.sd_icon           = create_icon_label(scr, LV_SYMBOL_SD_CARD,  CLR_FG,          15,  icon_y);
-    w.wifi_icon         = create_icon_label(scr, LV_SYMBOL_WIFI,     CLR_FG,          50,  icon_y);
+    w.can_icon          = create_icon_label(scr, LV_SYMBOL_WIFI,     CLR_WARN_YELLOW, 50,  icon_y);
     w.temp_warning_icon = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_RED,    90,  icon_y);
     w.warning_icon      = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_YELLOW, 125, icon_y);
     w.info_icon         = create_icon_label(scr, LV_SYMBOL_LIST,     CLR_WARN_YELLOW, 160, icon_y);
@@ -478,6 +479,21 @@ void dashboard_refresh(const DashboardState &state)
             lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_RED, 0);
         }
         prev_sd_started = state.sd_started;
+    }
+
+    // -- CAN status icon (CANU-02, D-11) --
+    CanStatus can_st = state.can_status.load();
+    if (can_st != prev_can_status) {
+        lv_color_t can_color;
+        if (can_st == CanStatus::RECEIVING) {
+            can_color = CLR_RPM_ARC;       // green — actively receiving frames
+        } else if (can_st == CanStatus::NO_DATA) {
+            can_color = CLR_WARN_YELLOW;   // yellow — no frame in last 3 s
+        } else {
+            can_color = CLR_WARN_RED;      // red — ERR_PASSIVE or BUS_OFF
+        }
+        lv_obj_set_style_text_color(w.can_icon, can_color, 0);
+        prev_can_status = can_st;
     }
 }
 
