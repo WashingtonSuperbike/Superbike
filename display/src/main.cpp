@@ -41,18 +41,18 @@ static void simulationTask(void *param)
         float cos_t   = cosf(t);
         float abs_sin  = fabsf(sin_t);
 
-        // -- DATA SIMULATION --
-        dashState.motor.RPM = 2500.0f + 2500.0f * sin_t;
-        dashState.motor.motor_current = 100.0f * sin_t;
+        // -- DATA SIMULATION (v1.6: with high-frequency noise) --
+        dashState.motor.RPM = 2500.0f + 2500.0f * sin_t + ((float)(esp_random() % 100) - 50.0f);
+        dashState.motor.motor_current = 100.0f * sin_t + ((float)(esp_random() % 20) - 10.0f);
         dashState.motor.motor_controller_battery_voltage = 60.0f + 8.0f * cos_t;
-        dashState.battery.hv_series_voltage = 62.5f + 7.5f * cos_t;
+        dashState.battery.hv_series_voltage = 90.0f + 15.0f * cos_t + ((float)(esp_random() % 20) - 10.0f) / 10.0f;
         dashState.gyro.roll_angle = 30.0f * sin_t;
 
-        // -- ERROR SIMULATION CYCLE --
+        // -- ERROR SIMULATION CYCLE (v1.6: staggered for independent icon verification) --
         uint32_t elapsed = millis() - stage_start_ms;
         
         if (elapsed > 10000) { // Switch stage every 10 seconds
-            stage = (stage + 1) % 3;
+            stage = (stage + 1) % 5;
             stage_start_ms = millis();
             Serial.printf("Simulation switching to Stage %d\n", stage);
         }
@@ -65,19 +65,25 @@ static void simulationTask(void *param)
         dashState.temps.motor_temperature = 50.0f;
 
         if (stage == 0) {
-            // Stage 0: Normal Operation
-            // No errors, green icons
+            // Stage 0: Normal Operation (All Green)
         } 
         else if (stage == 1) {
-            // Stage 1: Warnings & Carousel
-            dashState.bms.bms_c_fault = 0x01; // CONFIG UNLOCKED (WARN)
-            dashState.motor.error_message = 0x01; // ID ANGLE FAULT (WARN)
-            dashState.temps.motor_temperature = 98.0f; // MOTOR OVER-TEMP (WARN)
+            // Stage 1: BMS Warning Only (BMS Yellow, MC Green)
+            dashState.bms.bms_c_fault = 0x01; // CONFIG UNLOCKED
         }
         else if (stage == 2) {
-            // Stage 2: Critical Pop-up
-            dashState.motor.error_message = 0x02; // OVER VOLTAGE (CRIT)
+            // Stage 2: MC Warning Only (BMS Green, MC Yellow)
+            dashState.motor.error_message = 0x01; // ID ANGLE FAULT
+        }
+        else if (stage == 3) {
+            // Stage 3: BMS Critical, MC Warning (BMS Red, MC Yellow)
             dashState.bms.bms_status_flag = 0x01; // HIGH CELL VOLT (CRIT)
+            dashState.motor.error_message = 0x10; // STALL FAULT (WARN)
+        }
+        else if (stage == 4) {
+            // Stage 4: Both Critical (Both Red)
+            dashState.bms.bms_status_flag = 0x02; // LOW CELL VOLT (CRIT)
+            dashState.motor.error_message = 0x02; // OVER VOLTAGE (CRIT)
         }
 
         // Hold spinlock while writing cell voltages

@@ -204,7 +204,8 @@ struct DashboardWidgets {
     lv_obj_t *gyro_label;
 
     // Battery info (bottom-right)
-    lv_obj_t *batt_voltage_label;
+    lv_obj_t *mc_voltage_label;   // Motor controller voltage
+    lv_obj_t *batt_voltage_label; // Series voltage
     lv_obj_t *batt_percent_label;
     lv_obj_t *batt_icon;
 
@@ -213,18 +214,15 @@ struct DashboardWidgets {
 
     // Status icons (bottom strip)
     lv_obj_t *sd_icon;
-    lv_obj_t *can_icon;   // D-10: replaces wifi_icon; same x=50 position in status strip
-    lv_obj_t *warning_icon;
-    lv_obj_t *info_icon;
-    lv_obj_t *temp_warning_icon;
+    lv_obj_t *can_icon;
+    lv_obj_t *bms_status_label; // existing
+    lv_obj_t *mc_status_icon;   // new for Phase 06
+
+    // Superbike logo (bottom middle)
     lv_obj_t *logo_icon;
 
     // Error message
     lv_obj_t *error_label;
-
-    // BMS/MC status icons
-    lv_obj_t *bms_status_label; // existing
-    lv_obj_t *mc_status_icon;   // new for Phase 06
 
     // Warning carousel (bottom-right)
     lv_obj_t *warning_carousel_label;

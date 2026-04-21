@@ -17,6 +17,8 @@
 
 #include "DashboardUI.h"
 #include "../lvgl_config/lvgl_v8_port.h"
+#include "../Utils/EMAFilter.h"
+#include "Config.h"
 #include <cstdio>
 #include <cmath>
 
@@ -24,23 +26,23 @@
 // COLOUR PALETTE (matches NewUI.cpp hex values, converted to LVGL 32-bit)
 // ============================================================================
 
-#define CLR_BG          lv_color_black()
-#define CLR_FG          lv_color_white()
-#define CLR_SPEED       lv_color_white()
-#define CLR_RPM_ARC     lv_color_make(0x24, 0xBE, 0x24)  // green-ish
-#define CLR_POWER_POS   lv_color_make(0x24, 0xBE, 0x48)  // ~0x24BE
-#define CLR_POWER_NEG   lv_color_make(0x4D, 0x6A, 0x4D)  // ~0x4D6A (regen)
-#define CLR_BATT_TEMP   lv_color_make(0xF8, 0x71, 0x10)  // ~0xF8E2 warm
-#define CLR_MOTOR_TEMP  lv_color_make(0x3E, 0xCA, 0x50)  // ~0x3F2A cool
-#define CLR_MC_TEMP     lv_color_make(0xFE, 0x80, 0x00)  // ~0xFE40 orange
-#define CLR_GYRO        lv_color_make(0xBD, 0xBD, 0xBD)  // ~0xBDF7 grey
-#define CLR_WARN_RED    lv_color_make(0xF8, 0x20, 0x00)
-#define CLR_WARN_YELLOW lv_color_make(0xFE, 0xE0, 0x00)
-#define CLR_DISABLED    lv_color_make(0x80, 0x80, 0x80)  // gray for boot/inactive
-#define CLR_LOGO        lv_color_make(0x4B, 0x2C, 0x92)  // purple
-#define CLR_MOTORING    lv_color_make(0x00, 0x80, 0xFF)  // blue (motoring / positive current)
-#define CLR_REGEN       lv_color_make(0x00, 0xC8, 0x00)  // green (regen / negative current)
-#define CLR_NEEDLE      lv_color_make(0xFF, 0x20, 0x00)  // red needle
+#define CLR_BG           lv_color_black()
+#define CLR_WHITE        lv_color_white()
+#define CLR_SPEED        lv_color_white()
+#define CLR_STATUS_GREEN lv_color_make(0x24, 0xBE, 0x24)  // green-ish
+#define CLR_POWER_POS    lv_color_make(0x24, 0xBE, 0x48)  // ~0x24BE
+#define CLR_POWER_NEG    lv_color_make(0x4D, 0x6A, 0x4D)  // ~0x4D6A (regen)
+#define CLR_BATT_TEMP    lv_color_make(0xF8, 0x71, 0x10)  // ~0xF8E2 warm
+#define CLR_MOTOR_TEMP   lv_color_make(0x3E, 0xCA, 0x50)  // ~0x3F2A cool
+#define CLR_MC_TEMP      lv_color_make(0xFE, 0x80, 0x00)  // ~0xFE40 orange
+#define CLR_GYRO         lv_color_make(0xBD, 0xBD, 0xBD)  // ~0xBDF7 grey
+#define CLR_WARN_RED     lv_color_make(0xF8, 0x20, 0x00)
+#define CLR_WARN_YELLOW  lv_color_make(0xFE, 0xE0, 0x00)
+#define CLR_DISABLED     lv_color_make(0x80, 0x80, 0x80)  // gray for boot/inactive
+#define CLR_LOGO         lv_color_make(0x4B, 0x2C, 0x92)  // purple
+#define CLR_MOTORING     lv_color_make(0x00, 0x80, 0xFF)  // blue  (positive current)
+#define CLR_REGEN        lv_color_make(0x00, 0xC8, 0x00)  // green (negative current)
+#define CLR_NEEDLE       lv_color_make(0xFF, 0x20, 0x00)  // red needle
 
 // ============================================================================
 // STATIC WIDGET STATE
@@ -48,20 +50,29 @@
 
 static DashboardWidgets w;
 
+// v1.6 Data Smoothing Filters
+static EMAFilter f_rpm(0.5f);
+static EMAFilter f_current(0.5f);
+static EMAFilter f_voltage(1.5f);
+static EMAFilter f_mc_voltage(1.5f);
+static EMAFilter f_batt_temp(2.0f);
+static EMAFilter f_motor_temp(2.0f);
+static EMAFilter f_mc_temp(2.0f);
+static EMAFilter f_gyro(0.25f);
+
 // Previous values for dirty-checking (only redraw when changed)
 static int prev_speed = -1;
 static int32_t prev_current_value = 0;   // absolute amps, clamped to 100
 static int     prev_current_dir   = 0;   // -1 regen, 0 idle, +1 motoring
-static int     prev_batt_temp     = -999;
-static int     prev_motor_temp    = -999;
-static int     prev_mc_temp       = -999;
-static int     prev_gyro_roll     = -999;
-static int     prev_batt_mv       = -999; // (int)(voltage * 10)
-static int     prev_batt_pct      = -999;
-static int     prev_error_msg     = -1;
-static int     prev_bms_flag      = -1;
-static bool    prev_sd_started    = true;   // force color update on first refresh
-static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push on first refresh (sentinel != boot BOOT)
+static int     prev_batt_temp     = -1;
+static int     prev_motor_temp    = -1;
+static int     prev_mc_temp       = -1;
+static int     prev_gyro_roll     = 0;
+static int     prev_batt_mv       = -1; // (int)(voltage * 10)
+static int     prev_mc_mv         = -1; // (int)(mc_voltage * 10)
+static int     prev_batt_pct      = -1;
+static bool    prev_sd_started    = false;
+static CanStatus prev_can_status  = CanStatus::BOOT;
 
 // Spinlock protecting DashboardState.error_list
 portMUX_TYPE g_error_list_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -297,14 +308,14 @@ static void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,
     // Value label centred inside the arc
     *label = lv_label_create(*arc);
     lv_label_set_text(*label, "--");
-    lv_obj_set_style_text_color(*label, CLR_FG, 0);
+    lv_obj_set_style_text_color(*label, CLR_WHITE, 0);
     lv_obj_set_style_text_font(*label, &lv_font_montserrat_16, 0);
     lv_obj_center(*label);
 
     // Title label below the arc
     lv_obj_t *title_lbl = lv_label_create(parent);
     lv_label_set_text(title_lbl, title);
-    lv_obj_set_style_text_color(title_lbl, CLR_FG, 0);
+    lv_obj_set_style_text_color(title_lbl, CLR_WHITE, 0);
     lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
     lv_obj_align_to(title_lbl, *arc, LV_ALIGN_BOTTOM_MID, 0, 5);
 }
@@ -386,28 +397,30 @@ void dashboard_create(void)
     // --- Digital speed readout (positioned over dial image) ---
     w.meter_speed_label = lv_label_create(scr);
     lv_label_set_text(w.meter_speed_label, "0");
-    lv_obj_set_style_text_color(w.meter_speed_label, CLR_FG, 0);
+    lv_obj_set_style_text_color(w.meter_speed_label, CLR_WHITE, 0);
     lv_obj_set_style_text_font(w.meter_speed_label, &lv_font_montserrat_144, 0);
     lv_obj_set_style_text_align(w.meter_speed_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_width(w.meter_speed_label, 300);
     lv_obj_set_pos(w.meter_speed_label, 100, 300);
 
     // -- TEMPERATURE ARCS (right column) --
-    const lv_coord_t arc_x = 570;
+    const lv_coord_t arc_x = 520;
+    const lv_coord_t arc_y = 25;
+    const lv_coord_t arc_spacing = 135;
     create_temp_arc(scr, &w.batt_temp_arc, &w.batt_temp_label,
                     "BATT", CLR_BATT_TEMP,
                     BATT_TEMP_MIN, BATT_TEMP_MAX,
-                    arc_x, 5);
+                    arc_x, arc_y);
 
     create_temp_arc(scr, &w.motor_temp_arc, &w.motor_temp_label,
                     "MOTOR", CLR_MOTOR_TEMP,
                     MOTOR_TEMP_MIN, MOTOR_TEMP_MAX,
-                    arc_x + 120, 5);
+                    arc_x + arc_spacing, arc_y);
 
     create_temp_arc(scr, &w.mc_temp_arc, &w.mc_temp_label,
                     "MTR CTRL", CLR_MC_TEMP,
                     MC_TEMP_MIN, MC_TEMP_MAX,
-                    arc_x, 140);
+                    arc_x, arc_y + arc_spacing);
 
     // -- GYRO ARC --
     w.gyro_arc = lv_arc_create(scr);
@@ -421,17 +434,17 @@ void dashboard_create(void)
     lv_obj_set_style_arc_width(w.gyro_arc, 10, LV_PART_INDICATOR);
     lv_obj_remove_style(w.gyro_arc, NULL, LV_PART_KNOB);
     lv_obj_clear_flag(w.gyro_arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(w.gyro_arc, arc_x + 120, 140);
+    lv_obj_set_pos(w.gyro_arc, arc_x + arc_spacing, arc_y + arc_spacing);
 
     w.gyro_label = lv_label_create(w.gyro_arc);
     lv_label_set_text(w.gyro_label, "0");
-    lv_obj_set_style_text_color(w.gyro_label, CLR_FG, 0);
+    lv_obj_set_style_text_color(w.gyro_label, CLR_WHITE, 0);
     lv_obj_set_style_text_font(w.gyro_label, &lv_font_montserrat_16, 0);
     lv_obj_center(w.gyro_label);
 
     lv_obj_t *gyro_title = lv_label_create(scr);
     lv_label_set_text(gyro_title, "GYRO");
-    lv_obj_set_style_text_color(gyro_title, CLR_FG, 0);
+    lv_obj_set_style_text_color(gyro_title, CLR_WHITE, 0);
     lv_obj_set_style_text_font(gyro_title, &lv_font_montserrat_12, 0);
     lv_obj_align_to(gyro_title, w.gyro_arc, LV_ALIGN_BOTTOM_MID, 0, 5);
 
@@ -439,51 +452,69 @@ void dashboard_create(void)
 
     // Status icons row
     lv_coord_t icon_y = 445;
-    w.sd_icon           = create_icon_label(scr, LV_SYMBOL_SD_CARD,  CLR_FG,          15,  icon_y);
-    w.can_icon          = create_icon_label(scr, LV_SYMBOL_CAN_LINK, CLR_DISABLED,    50,  icon_y, &can_link);
-    w.temp_warning_icon = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_RED,    90,  icon_y);
-    w.warning_icon      = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_YELLOW, 125, icon_y);
-    w.info_icon         = create_icon_label(scr, LV_SYMBOL_LIST,     CLR_WARN_YELLOW, 160, icon_y);
-    
-    // v1.5 BMS/MC Status Icons
-    w.bms_status_label  = create_icon_label(scr, LV_SYMBOL_BATTERY_EMPTY,   CLR_RPM_ARC, 200, icon_y);
-    w.mc_status_icon    = create_icon_label(scr, LV_SYMBOL_SETTINGS,        CLR_RPM_ARC, 240, icon_y);
+    w.sd_icon           = create_icon_label(scr, LV_SYMBOL_SD_CARD,  CLR_WHITE,        15,  icon_y);
+    w.can_icon          = create_icon_label(scr, LV_SYMBOL_CAN_LINK, CLR_DISABLED,     50,  icon_y, &can_link);
+    w.bms_status_label  = create_icon_label(scr, LV_SYMBOL_CHARGE,   CLR_STATUS_GREEN, 90,  icon_y);
+    w.mc_status_icon    = create_icon_label(scr, LV_SYMBOL_SETTINGS, CLR_STATUS_GREEN, 120, icon_y);
 
-    // Logo placeholder (centre-bottom)
+    // Logo (center bottom)
     w.logo_icon = lv_img_create(scr);
     lv_img_set_src(w.logo_icon, &logo55);
     lv_obj_set_style_img_recolor(w.logo_icon, CLR_LOGO, 0);
     lv_obj_set_style_img_recolor_opa(w.logo_icon, LV_OPA_COVER, 0);
     lv_obj_align(w.logo_icon, LV_ALIGN_BOTTOM_MID, 0, -15);
 
-    // Warning carousel (bottom-right)
-    w.warning_carousel_icon = create_icon_label(scr, LV_SYMBOL_WARNING, CLR_WARN_YELLOW, 450, icon_y);
+    // Battery info group (MC Voltage | Pack Voltage | Icon | %)
+    // Create the battery icon first as the anchor
+    w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL, CLR_WHITE, 660, icon_y-5, &lv_font_montserrat_30);
+    lv_obj_set_width(w.batt_icon, 50);
+    lv_obj_set_style_text_align(w.batt_icon, LV_TEXT_ALIGN_CENTER, 0);
+
+    // Pack Voltage (Left of icon)
+    w.batt_voltage_label = lv_label_create(scr);
+    lv_obj_set_width(w.batt_voltage_label, 100);
+    lv_obj_set_style_text_align(w.batt_voltage_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(w.batt_voltage_label, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.batt_voltage_label, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.batt_voltage_label, w.batt_icon, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+    lv_label_set_text(w.batt_voltage_label, "0.0 V");
+
+    // MC Voltage (Left of Pack Voltage)
+    w.mc_voltage_label = lv_label_create(scr);
+    lv_obj_set_width(w.mc_voltage_label, 100);
+    lv_obj_set_style_text_align(w.mc_voltage_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(w.mc_voltage_label, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.mc_voltage_label, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.mc_voltage_label, w.batt_voltage_label, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+    lv_label_set_text(w.mc_voltage_label, "0.0 V");
+
+    w.batt_percent_label = lv_label_create(scr);
+    lv_obj_set_width(w.batt_percent_label, 80);
+    lv_obj_set_style_text_align(w.batt_percent_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(w.batt_percent_label, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.batt_percent_label, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.batt_percent_label, w.batt_icon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_label_set_text(w.batt_percent_label, "-- %");
+    lv_obj_set_width(w.batt_percent_label, 80);
+    lv_obj_set_style_text_align(w.batt_percent_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(w.batt_percent_label, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.batt_percent_label, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.batt_percent_label, w.batt_icon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_label_set_text(w.batt_percent_label, "-- %");
+
+    // -- Warning carousel (bottom-right above battery info) --
+    int warning_y = icon_y - 110;
+    w.warning_carousel_icon = create_icon_label(scr, LV_SYMBOL_WARNING, CLR_WARN_YELLOW, 460, warning_y);
     lv_obj_add_flag(w.warning_carousel_icon, LV_OBJ_FLAG_HIDDEN);
 
     w.warning_carousel_label = lv_label_create(scr);
     lv_label_set_text(w.warning_carousel_label, "");
     lv_obj_set_style_text_color(w.warning_carousel_label, CLR_WARN_YELLOW, 0);
     lv_obj_set_style_text_font(w.warning_carousel_label, &lv_font_montserrat_18, 0);
-    lv_obj_set_pos(w.warning_carousel_label, 485, icon_y + 2);
-    lv_obj_set_width(w.warning_carousel_label, 250); // limit width for bottom strip
+    lv_obj_set_pos(w.warning_carousel_label, 490, warning_y);
+    lv_obj_set_width(w.warning_carousel_label, 300);
 
-    // Battery voltage + percentage (bottom-right)
-    w.batt_voltage_label = lv_label_create(scr);
-    lv_label_set_text(w.batt_voltage_label, "0.0 V");
-    lv_obj_set_style_text_color(w.batt_voltage_label, CLR_FG, 0);
-    lv_obj_set_style_text_font(w.batt_voltage_label, &lv_font_montserrat_18, 0);
-    lv_obj_set_pos(w.batt_voltage_label, 650, 415);
-
-    w.batt_percent_label = lv_label_create(scr);
-    lv_label_set_text(w.batt_percent_label, "-- %");
-    lv_obj_set_style_text_color(w.batt_percent_label, CLR_FG, 0);
-    lv_obj_set_style_text_font(w.batt_percent_label, &lv_font_montserrat_18, 0);
-    lv_obj_set_pos(w.batt_percent_label, 650, 445);
-
-    // Battery icon placeholder
-    w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL, CLR_WARN_RED, 740, 425);
-
-    // -- CRITICAL ERROR MODAL (v1.5) --
+    // -- CRITICAL ERROR MODAL --
     w.error_modal = lv_obj_create(scr);
     lv_obj_set_size(w.error_modal, 640, 360);
     lv_obj_center(w.error_modal);
@@ -503,7 +534,7 @@ void dashboard_create(void)
 
     lv_obj_t *modal_sub = lv_label_create(w.error_modal);
     lv_label_set_text(modal_sub, "CRITICAL FAULT DETECTED");
-    lv_obj_set_style_text_color(modal_sub, CLR_FG, 0);
+    lv_obj_set_style_text_color(modal_sub, CLR_WHITE, 0);
     lv_obj_set_style_text_font(modal_sub, &lv_font_montserrat_20, 0);
     lv_obj_align(modal_sub, LV_ALIGN_TOP_MID, 0, 110);
 
@@ -529,8 +560,41 @@ void dashboard_refresh(const DashboardState &state)
 {
     char buf[32];
 
+    // -- v1.6 Data Smoothing --
+    // Snap to values on first run to avoid 0 -> value ramp transients
+    if (prev_speed == -1) {
+        f_rpm.reset(state.motor.RPM);
+        f_current.reset(state.motor.motor_current);
+        f_voltage.reset(state.battery.hv_series_voltage);
+        f_mc_voltage.reset(state.motor.motor_controller_battery_voltage);
+        f_gyro.reset(state.gyro.roll_angle);
+        f_motor_temp.reset(state.temps.motor_temperature);
+        f_mc_temp.reset(state.temps.motor_controller_temperature);
+        
+        float max_t = 0;
+        for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
+            if (state.thermistors.temps[i] > max_t) max_t = state.thermistors.temps[i];
+        }
+        f_batt_temp.reset(max_t);
+    }
+
+    float s_rpm     = f_rpm.update(state.motor.RPM);
+    float s_current = f_current.update(state.motor.motor_current);
+    float s_voltage = f_voltage.update(state.battery.hv_series_voltage);
+    float s_mc_v    = f_mc_voltage.update(state.motor.motor_controller_battery_voltage);
+    float s_gyro    = f_gyro.update(state.gyro.roll_angle);
+    float s_motor_t = f_motor_temp.update(state.temps.motor_temperature);
+    float s_mc_t    = f_mc_temp.update(state.temps.motor_controller_temperature);
+
+    float max_batt_temp = 0;
+    for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
+        if (state.thermistors.temps[i] > max_batt_temp)
+            max_batt_temp = state.thermistors.temps[i];
+    }
+    float s_batt_t = f_batt_temp.update(max_batt_temp);
+
     // -- Speed (needle + digital label) --
-    int speed = rpm_to_mph(state.motor.RPM);
+    int speed = rpm_to_mph(s_rpm);
     if (speed < 0)   speed = 0;
     if (speed > 140) speed = 140;   // clamp to dial face max
     if (speed != prev_speed) {
@@ -547,13 +611,7 @@ void dashboard_refresh(const DashboardState &state)
     }
 
     // -- Temperature arcs --
-    // Battery pack: max thermistor reading
-    float max_batt_temp = 0;
-    for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
-        if (state.thermistors.temps[i] > max_batt_temp)
-            max_batt_temp = state.thermistors.temps[i];
-    }
-    int batt_temp_int = (int)max_batt_temp;
+    int batt_temp_int = (int)s_batt_t;
     if (batt_temp_int != prev_batt_temp) {
         lv_arc_set_value(w.batt_temp_arc, batt_temp_int);
         snprintf(buf, sizeof(buf), "%d C", batt_temp_int);
@@ -562,7 +620,7 @@ void dashboard_refresh(const DashboardState &state)
     }
 
     // Motor temperature
-    int motor_temp_int = (int)state.temps.motor_temperature;
+    int motor_temp_int = (int)s_motor_t;
     if (motor_temp_int != prev_motor_temp) {
         lv_arc_set_value(w.motor_temp_arc, motor_temp_int);
         snprintf(buf, sizeof(buf), "%d C", motor_temp_int);
@@ -571,7 +629,7 @@ void dashboard_refresh(const DashboardState &state)
     }
 
     // Motor controller temperature
-    int mc_temp_int = (int)state.temps.motor_controller_temperature;
+    int mc_temp_int = (int)s_mc_t;
     if (mc_temp_int != prev_mc_temp) {
         lv_arc_set_value(w.mc_temp_arc, mc_temp_int);
         snprintf(buf, sizeof(buf), "%d C", mc_temp_int);
@@ -580,7 +638,7 @@ void dashboard_refresh(const DashboardState &state)
     }
 
     // -- Gyro (roll angle) --
-    int roll = (int)state.gyro.roll_angle;
+    int roll = (int)s_gyro;
     if (roll != prev_gyro_roll) {
         lv_arc_set_value(w.gyro_arc, roll);
         snprintf(buf, sizeof(buf), "%d deg", roll);
@@ -589,11 +647,10 @@ void dashboard_refresh(const DashboardState &state)
     }
 
     // -- Motor current arcs (outer ring) --
-    float current = state.motor.motor_current;
-    float abs_current = fabsf(current);
+    float abs_current = fabsf(s_current);
     if (abs_current > 100.0f) abs_current = 100.0f;
 
-    int cur_dir = (current > 0.0f) ? 1 : (current < 0.0f) ? -1 : 0;
+    int cur_dir = (s_current > 0.0f) ? 1 : (s_current < 0.0f) ? -1 : 0;
     int32_t cur_val = (int32_t)abs_current;
     if (cur_dir != prev_current_dir || cur_val != prev_current_value) {
         if (cur_dir > 0) {
@@ -612,38 +669,59 @@ void dashboard_refresh(const DashboardState &state)
         prev_current_value = cur_val;
     }
 
-    // -- Battery voltage (sum of HV cells) --
-    int batt_mv = (int)(state.battery.hv_series_voltage * 10.0f);
+    // -- Battery and MC voltage readouts --
+    int batt_mv = (int)(s_voltage * 10.0f);
     if (batt_mv != prev_batt_mv) {
-        snprintf(buf, sizeof(buf), "%.1f V", state.battery.hv_series_voltage);
+        snprintf(buf, sizeof(buf), "%.1f V", s_voltage);
         lv_label_set_text(w.batt_voltage_label, buf);
         prev_batt_mv = batt_mv;
     }
 
+    int mc_mv = (int)(s_mc_v * 10.0f);
+    if (mc_mv != prev_mc_mv) {
+        snprintf(buf, sizeof(buf), "%.1f V", s_mc_v);
+        lv_label_set_text(w.mc_voltage_label, buf);
+        prev_mc_mv = mc_mv;
+    }        
+
     // Battery % estimate: linear map across nominal 24s LiIO range
-    // 24 cells x 2.5V empty = 60V, 24 cells x 4.2V full = 100.8V
-    float pct = (state.battery.hv_series_voltage - 60.0f)
-              / (100.8f - 60.0f) * 100.0f;
+    float pct = (s_voltage - 60.0f) / (100.8f - 60.0f) * 100.0f;
     if (pct > 100.0f) pct = 100.0f;
     if (pct < 0.0f)   pct = 0.0f;
     int pct_int = (int)pct;
+
     if (pct_int != prev_batt_pct) {
         snprintf(buf, sizeof(buf), "%d %%", pct_int);
         lv_label_set_text(w.batt_percent_label, buf);
 
-        if (pct < 20.0f)
-            lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_RED, 0);
-        else if (pct < 50.0f)
-            lv_obj_set_style_text_color(w.batt_icon, CLR_WARN_YELLOW, 0);
-        else
-            lv_obj_set_style_text_color(w.batt_icon, CLR_FG, 0);
+        // Update icon symbol and color based on percentage thresholds
+        const char *symbol = LV_SYMBOL_BATTERY_FULL;
+        lv_color_t color = CLR_WHITE;
+
+        if (pct < 10.0f) {
+            symbol = LV_SYMBOL_BATTERY_EMPTY;
+            color = CLR_WARN_RED;
+        } else if (pct < 25.0f) {
+            symbol = LV_SYMBOL_BATTERY_1;
+            color = CLR_WARN_RED;
+        } else if (pct < 50.0f) {
+            symbol = LV_SYMBOL_BATTERY_2;
+            color = CLR_WARN_YELLOW;
+        } else if (pct < 75.0f) {
+            symbol = LV_SYMBOL_BATTERY_3;
+            color = CLR_WHITE;
+        }
+
+        lv_label_set_text(w.batt_icon, symbol);
+        lv_obj_set_style_text_color(w.batt_icon, color, 0);
+        
         prev_batt_pct = pct_int;
     }
 
     // -- SD card icon --
     if (state.sd_started != prev_sd_started) {
         if (state.sd_started) {
-            lv_obj_set_style_text_color(w.sd_icon, CLR_FG, 0);
+            lv_obj_set_style_text_color(w.sd_icon, CLR_WHITE, 0);
         } else {
             lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_RED, 0);
         }
@@ -655,7 +733,7 @@ void dashboard_refresh(const DashboardState &state)
     if (can_st != prev_can_status) {
         lv_color_t can_color;
         if (can_st == CanStatus::RECEIVING) {
-            can_color = CLR_RPM_ARC;       // green — actively receiving frames
+            can_color = CLR_STATUS_GREEN;       // green — actively receiving frames
         } else if (can_st == CanStatus::TIMEOUT) {
             can_color = CLR_WARN_YELLOW;   // yellow — no frame in last 1 s (after contact)
         } else if (can_st == CanStatus::BOOT) {
@@ -671,8 +749,8 @@ void dashboard_refresh(const DashboardState &state)
     auto get_sev_color = [](ErrorSeverity sev) {
         if (sev == ErrorSeverity::CRIT) return CLR_WARN_RED;
         if (sev == ErrorSeverity::WARN) return CLR_WARN_YELLOW;
-        if (sev == ErrorSeverity::INFO) return CLR_FG;
-        return CLR_RPM_ARC; // Green for NONE
+        if (sev == ErrorSeverity::INFO) return CLR_WHITE;
+        return CLR_STATUS_GREEN; // Green for NONE
     };
     lv_obj_set_style_text_color(w.bms_status_label, get_sev_color(state.bms_severity.load()), 0);
     lv_obj_set_style_text_color(w.mc_status_icon,   get_sev_color(state.mc_severity.load()), 0);
@@ -774,7 +852,7 @@ void dashboard_refresh(const DashboardState &state)
 }
 
 // ============================================================================
-// dashboardTask()  -- FreeRTOS task that refreshes the UI at ~10 Hz
+// dashboardTask()  -- FreeRTOS task that refreshes the UI at ~20 Hz
 // ============================================================================
 
 void dashboardTask(void *param)
@@ -786,6 +864,6 @@ void dashboardTask(void *param)
             dashboard_refresh(*state);
             lvgl_port_unlock();
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(1000 / UPDATE_RATE_HZ));
     }
 }
