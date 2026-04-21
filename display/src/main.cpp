@@ -33,53 +33,61 @@ static void simulationTask(void *param)
 {
     (void)param;
     float t = 0.0f;
+    uint32_t stage_start_ms = millis();
+    int stage = 0; // 0: Normal, 1: Warnings, 2: Critical
 
     while (true) {
         float sin_t   = sinf(t);
         float cos_t   = cosf(t);
         float abs_sin  = fabsf(sin_t);
 
-        // RPM: 0-5000 sine wave
+        // -- DATA SIMULATION --
         dashState.motor.RPM = 2500.0f + 2500.0f * sin_t;
-        // Motor current: -100 to 100 A
         dashState.motor.motor_current = 100.0f * sin_t;
-        // HV voltage from motor controller
         dashState.motor.motor_controller_battery_voltage = 60.0f + 8.0f * cos_t;
-        // Error message: flash briefly every ~20 seconds
-        dashState.motor.error_message = (((int)(t * 10) % 200) < 5) ? 0x0010 : 0;
-
-        // Temperatures
-        dashState.temps.motor_temperature = 40.0f + 50.0f * abs_sin;
-        dashState.temps.motor_controller_temperature = 30.0f + 40.0f * abs_sin;
-        dashState.temps.throttle = abs_sin;
-
-        // Battery thermistors: spread between 20-55 C
-        for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
-            dashState.thermistors.temps[i] = 25.0f + 20.0f * fabsf(sinf(t + i * 0.3f));
-        }
-
-        // Battery voltage: 55-70V range (20s pack)
         dashState.battery.hv_series_voltage = 62.5f + 7.5f * cos_t;
-        dashState.battery.aux_battery_voltage = 12.4f + 0.6f * cos_t;
-
-        // Gyro roll: gentle lean simulation
         dashState.gyro.roll_angle = 30.0f * sin_t;
 
-        // BMS: flag an error briefly every ~30 seconds
-        dashState.bms.bms_status_flag = (((int)(t * 10) % 300) < 10) ? 1.0f : 0.0f;
+        // -- ERROR SIMULATION CYCLE --
+        uint32_t elapsed = millis() - stage_start_ms;
+        
+        if (elapsed > 10000) { // Switch stage every 10 seconds
+            stage = (stage + 1) % 3;
+            stage_start_ms = millis();
+            Serial.printf("Simulation switching to Stage %d\n", stage);
+        }
 
-        // Cell voltages: 3.3-4.1V sweep with per-cell phase offset (D-03)
-        // Hold spinlock while writing — logger_task reads under the same lock.
+        // Reset all error triggers
+        dashState.bms.bms_status_flag = 0;
+        dashState.bms.bms_c_fault = 0;
+        dashState.motor.error_message = 0;
+        dashState.temps.motor_controller_temperature = 40.0f;
+        dashState.temps.motor_temperature = 50.0f;
+
+        if (stage == 0) {
+            // Stage 0: Normal Operation
+            // No errors, green icons
+        } 
+        else if (stage == 1) {
+            // Stage 1: Warnings & Carousel
+            dashState.bms.bms_c_fault = 0x01; // CONFIG UNLOCKED (WARN)
+            dashState.motor.error_message = 0x01; // ID ANGLE FAULT (WARN)
+            dashState.temps.motor_temperature = 98.0f; // MOTOR OVER-TEMP (WARN)
+        }
+        else if (stage == 2) {
+            // Stage 2: Critical Pop-up
+            dashState.motor.error_message = 0x02; // OVER VOLTAGE (CRIT)
+            dashState.bms.bms_status_flag = 0x01; // HIGH CELL VOLT (CRIT)
+        }
+
+        // Hold spinlock while writing cell voltages
         taskENTER_CRITICAL(&g_cell_voltages_mux);
         for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
             dashState.battery.hv_cell_voltages[i] = 3.7f + 0.4f * fabsf(sinf(t + i * 0.25f));
         }
         taskEXIT_CRITICAL(&g_cell_voltages_mux);
 
-        // SD card: owned by sd_poll_task — do not set here
-        // dashState.sd_started = true;
-
-        t += 0.02f;
+        t += 0.05f;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -148,15 +156,15 @@ void setup()
     );
 
     // Simulation task: animates gauge values including 24 cell voltages (D-03)
-    // xTaskCreatePinnedToCore(
-    //     simulationTask,
-    //     "dash_sim",
-    //     4096,
-    //     NULL,
-    //     1,
-    //     NULL,
-    //     0
-    // );
+    xTaskCreatePinnedToCore(
+        simulationTask,
+        "dash_sim",
+        4096,
+        NULL,
+        1,
+        NULL,
+        0
+    );
 
     xTaskCreatePinnedToCore(
         [](void *param) {

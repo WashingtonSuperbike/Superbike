@@ -63,6 +63,166 @@ static int     prev_bms_flag      = -1;
 static bool    prev_sd_started    = true;   // force color update on first refresh
 static CanStatus prev_can_status  = CanStatus::RECEIVING;  // force color push on first refresh (sentinel != boot BOOT)
 
+// Spinlock protecting DashboardState.error_list
+portMUX_TYPE g_error_list_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// ============================================================================
+// ERROR MAPPING HELPERS
+// ============================================================================
+
+static void add_error_to_list(DashboardErrorList &list, ErrorSource source, ErrorSeverity severity, const char *desc)
+{
+    if (list.errors[MAX_ACTIVE_ERRORS - 1].is_active) return; // list full
+
+    // Find first empty slot or update existing (though with clear-and-rebuild it's always empty)
+    for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+        if (!list.errors[i].is_active) {
+            list.errors[i].source = source;
+            list.errors[i].severity = severity;
+            strncpy(list.errors[i].description, desc, sizeof(list.errors[i].description) - 1);
+            list.errors[i].description[sizeof(list.errors[i].description) - 1] = '\0';
+            list.errors[i].is_active = true;
+            break;
+        }
+    }
+}
+
+void update_error_state(DashboardState *state)
+{
+    taskENTER_CRITICAL(&g_error_list_mux);
+
+    // Clear active flags (rebuild list every update)
+    for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+        state->error_list.errors[i].is_active = false;
+    }
+
+    ErrorSeverity max_bms = ErrorSeverity::NONE;
+    ErrorSeverity max_mc  = ErrorSeverity::NONE;
+
+    // --- BMS Errors (from @WarningErrorGuide.md) ---
+    uint32_t bms_flag = (uint32_t)state->bms.bms_status_flag;
+    if (bms_flag & 0x01) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: HIGH CELL VOLTAGE");
+        max_bms = ErrorSeverity::CRIT;
+    }
+    if (bms_flag & 0x02) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: LOW CELL VOLTAGE");
+        max_bms = ErrorSeverity::CRIT;
+    }
+    if (bms_flag & 0x04) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: BALANCING VOLTAGE");
+        if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+    }
+
+    if (state->bms.bms_c_fault & 0x04) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: OVER-TEMPERATURE");
+        max_bms = ErrorSeverity::CRIT;
+    }
+    if (state->bms.bms_c_fault & 0x08) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: THERMISTOR CENSUS");
+        if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+    }
+    if (state->bms.bms_c_fault & 0x01) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: CONFIG UNLOCKED");
+        if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+    }
+    if (state->bms.bms_c_fault & 0x02) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: CENSUS FAULT");
+        max_bms = ErrorSeverity::CRIT;
+    }
+
+    if (state->bms.ltc_fault & 0x01) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: LTC CHIP FAULT");
+        max_bms = ErrorSeverity::CRIT;
+    }
+    
+    // Check thermistor array for overheating
+    for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
+        if (state->thermistors.temps[i] >= BATT_TEMP_MAX) { // Using gauge max as warning threshold
+            char t_buf[32];
+            snprintf(t_buf, sizeof(t_buf), "BMS: THERMISTOR %d HOT", i);
+            add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, t_buf);
+            if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+        }
+    }
+
+    // Only check LTC count if we are actually receiving CAN data
+    if (state->can_status.load() == CanStatus::RECEIVING && state->bms.ltc_count == 0) {
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: PACK INCOMPLETE");
+        max_bms = ErrorSeverity::CRIT;
+    }
+
+    // --- Motor Controller Errors ---
+    uint16_t mc_err = (uint16_t)state->motor.error_message;
+    // Byte 7 (low byte of error_message)
+    if (mc_err & 0x01) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: ID ANGLE FAULT");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x02) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: OVER VOLTAGE");
+        max_mc = ErrorSeverity::CRIT;
+    }
+    if (mc_err & 0x04) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: LOW VOLTAGE");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x08) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: ANGLE SENSOR FAULT");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x10) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: STALL FAULT");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x20) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: INTERNAL VOLTS");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x80) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: THROTTLE AT PWRUP");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+
+    // Byte 8 (high byte of error_message)
+    if (mc_err & 0x0200) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: INTERNAL RESET");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x0400) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: THROTTLE CIRCUIT");
+        max_mc = ErrorSeverity::CRIT;
+    }
+    if (mc_err & 0x8000) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: GALVANOMETER FAULT");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+
+    // Temperature Escalations (using #defined thresholds)
+    float mc_temp = state->temps.motor_controller_temperature;
+    if (mc_temp >= MC_TEMP_CRIT_CELSIUS || (mc_err & 0x40)) { // 0x40 is OverTemp bit in Byte 7
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: OVER-TEMP CRITICAL");
+        max_mc = ErrorSeverity::CRIT;
+    } else if (mc_temp >= MC_TEMP_WARN_CELSIUS) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: OVER-TEMP WARNING");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+
+    float motor_temp = state->temps.motor_temperature;
+    if (motor_temp >= MOTOR_TEMP_CRIT_CELSIUS || (mc_err & 0x4000)) { // 0x4000 is Motor OverTemp bit in Byte 8
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MOTOR: OVER-TEMP CRITICAL");
+        max_mc = ErrorSeverity::CRIT;
+    } else if (motor_temp >= MOTOR_TEMP_WARN_CELSIUS) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MOTOR: OVER-TEMP WARNING");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+
+    state->bms_severity.store(max_bms);
+    state->mc_severity.store(max_mc);
+
+    taskEXIT_CRITICAL(&g_error_list_mux);
+}
+
 // ============================================================================
 // PLACEHOLDER IMAGES
 // ============================================================================
@@ -284,6 +444,10 @@ void dashboard_create(void)
     w.temp_warning_icon = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_RED,    90,  icon_y);
     w.warning_icon      = create_icon_label(scr, LV_SYMBOL_WARNING,  CLR_WARN_YELLOW, 125, icon_y);
     w.info_icon         = create_icon_label(scr, LV_SYMBOL_LIST,     CLR_WARN_YELLOW, 160, icon_y);
+    
+    // v1.5 BMS/MC Status Icons
+    w.bms_status_label  = create_icon_label(scr, LV_SYMBOL_BATTERY_EMPTY,   CLR_RPM_ARC, 200, icon_y);
+    w.mc_status_icon    = create_icon_label(scr, LV_SYMBOL_SETTINGS,        CLR_RPM_ARC, 240, icon_y);
 
     // Logo placeholder (centre-bottom)
     w.logo_icon = lv_img_create(scr);
@@ -292,19 +456,16 @@ void dashboard_create(void)
     lv_obj_set_style_img_recolor_opa(w.logo_icon, LV_OPA_COVER, 0);
     lv_obj_align(w.logo_icon, LV_ALIGN_BOTTOM_MID, 0, -15);
 
-    // Error message (centre-bottom, above icons)
-    w.error_label = lv_label_create(scr);
-    lv_label_set_text(w.error_label, "");
-    lv_obj_set_style_text_color(w.error_label, CLR_WARN_RED, 0);
-    lv_obj_set_style_text_font(w.error_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_pos(w.error_label, 500, 410);
+    // Warning carousel (bottom-right)
+    w.warning_carousel_icon = create_icon_label(scr, LV_SYMBOL_WARNING, CLR_WARN_YELLOW, 450, icon_y);
+    lv_obj_add_flag(w.warning_carousel_icon, LV_OBJ_FLAG_HIDDEN);
 
-    // BMS status
-    w.bms_status_label = lv_label_create(scr);
-    lv_label_set_text(w.bms_status_label, "BMS: OK");
-    lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
-    lv_obj_set_style_text_font(w.bms_status_label, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(w.bms_status_label, 500, 435);
+    w.warning_carousel_label = lv_label_create(scr);
+    lv_label_set_text(w.warning_carousel_label, "");
+    lv_obj_set_style_text_color(w.warning_carousel_label, CLR_WARN_YELLOW, 0);
+    lv_obj_set_style_text_font(w.warning_carousel_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_pos(w.warning_carousel_label, 485, icon_y + 2);
+    lv_obj_set_width(w.warning_carousel_label, 250); // limit width for bottom strip
 
     // Battery voltage + percentage (bottom-right)
     w.batt_voltage_label = lv_label_create(scr);
@@ -321,6 +482,38 @@ void dashboard_create(void)
 
     // Battery icon placeholder
     w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL, CLR_WARN_RED, 740, 425);
+
+    // -- CRITICAL ERROR MODAL (v1.5) --
+    w.error_modal = lv_obj_create(scr);
+    lv_obj_set_size(w.error_modal, 640, 360);
+    lv_obj_center(w.error_modal);
+    lv_obj_set_style_bg_color(w.error_modal, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(w.error_modal, LV_OPA_90, 0);
+    lv_obj_set_style_border_color(w.error_modal, CLR_WARN_RED, 0);
+    lv_obj_set_style_border_width(w.error_modal, 4, 0);
+    lv_obj_set_style_radius(w.error_modal, 20, 0);
+    lv_obj_add_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(w.error_modal, LV_OBJ_FLAG_SCROLLABLE);
+
+    w.modal_title = lv_label_create(w.error_modal);
+    lv_label_set_text(w.modal_title, "POWER CUT");
+    lv_obj_set_style_text_color(w.modal_title, CLR_WARN_RED, 0);
+    lv_obj_set_style_text_font(w.modal_title, &lv_font_montserrat_48, 0);
+    lv_obj_align(w.modal_title, LV_ALIGN_TOP_MID, 0, 40);
+
+    lv_obj_t *modal_sub = lv_label_create(w.error_modal);
+    lv_label_set_text(modal_sub, "CRITICAL FAULT DETECTED");
+    lv_obj_set_style_text_color(modal_sub, CLR_FG, 0);
+    lv_obj_set_style_text_font(modal_sub, &lv_font_montserrat_20, 0);
+    lv_obj_align(modal_sub, LV_ALIGN_TOP_MID, 0, 110);
+
+    w.modal_desc = lv_label_create(w.error_modal);
+    lv_label_set_text(w.modal_desc, "NO DATA");
+    lv_obj_set_style_text_color(w.modal_desc, CLR_WARN_YELLOW, 0);
+    lv_obj_set_style_text_font(w.modal_desc, &lv_font_montserrat_30, 0);
+    lv_obj_set_width(w.modal_desc, 580);
+    lv_obj_set_style_text_align(w.modal_desc, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(w.modal_desc, LV_ALIGN_CENTER, 0, 40);
 }
 
 // ============================================================================
@@ -447,33 +640,6 @@ void dashboard_refresh(const DashboardState &state)
         prev_batt_pct = pct_int;
     }
 
-    // -- Motor error message --
-    int err_msg = state.motor.error_message;
-    if (err_msg != prev_error_msg) {
-        if (err_msg != 0) {
-            snprintf(buf, sizeof(buf), "ERR: 0x%04X", err_msg);
-            lv_label_set_text(w.error_label, buf);
-            lv_obj_clear_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
-        } else {
-            lv_obj_add_flag(w.error_label, LV_OBJ_FLAG_HIDDEN);
-        }
-        prev_error_msg = err_msg;
-    }
-
-    // -- BMS status flag --
-    int bms_flag = (int)state.bms.bms_status_flag;
-    if (bms_flag != prev_bms_flag) {
-        if (bms_flag == 0) {
-            lv_label_set_text(w.bms_status_label, "BMS: OK");
-            lv_obj_set_style_text_color(w.bms_status_label, CLR_FG, 0);
-        } else {
-            snprintf(buf, sizeof(buf), "BMS: 0x%02X", bms_flag);
-            lv_label_set_text(w.bms_status_label, buf);
-            lv_obj_set_style_text_color(w.bms_status_label, CLR_WARN_RED, 0);
-        }
-        prev_bms_flag = bms_flag;
-    }
-
     // -- SD card icon --
     if (state.sd_started != prev_sd_started) {
         if (state.sd_started) {
@@ -499,6 +665,111 @@ void dashboard_refresh(const DashboardState &state)
         }
         lv_obj_set_style_text_color(w.can_icon, can_color, 0);
         prev_can_status = can_st;
+    }
+
+    // -- BMS/MC Status Icons (v1.5) --
+    auto get_sev_color = [](ErrorSeverity sev) {
+        if (sev == ErrorSeverity::CRIT) return CLR_WARN_RED;
+        if (sev == ErrorSeverity::WARN) return CLR_WARN_YELLOW;
+        if (sev == ErrorSeverity::INFO) return CLR_FG;
+        return CLR_RPM_ARC; // Green for NONE
+    };
+    lv_obj_set_style_text_color(w.bms_status_label, get_sev_color(state.bms_severity.load()), 0);
+    lv_obj_set_style_text_color(w.mc_status_icon,   get_sev_color(state.mc_severity.load()), 0);
+
+    // -- Warning Carousel (v1.5) --
+    static int carousel_idx = 0;
+    static uint32_t last_carousel_ms = 0;
+    const uint32_t carousel_interval_ms = 2500; // 2.5 seconds
+
+    taskENTER_CRITICAL(&g_error_list_mux);
+    
+    // Count active warnings/infos (CRIT handled by modal in next phase)
+    int warning_count = 0;
+    int first_warning_idx = -1;
+    for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+        if (state.error_list.errors[i].is_active && state.error_list.errors[i].severity != ErrorSeverity::CRIT) {
+            if (first_warning_idx == -1) first_warning_idx = i;
+            warning_count++;
+        }
+    }
+
+    if (warning_count > 0) {
+        lv_obj_clear_flag(w.warning_carousel_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(w.warning_carousel_label, LV_OBJ_FLAG_HIDDEN);
+
+        // Rotate index every interval
+        if (millis() - last_carousel_ms > carousel_interval_ms) {
+            carousel_idx++;
+            last_carousel_ms = millis();
+        }
+
+        // Find the next active warning
+        int found_idx = -1;
+        for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+            int check_idx = (carousel_idx + i) % MAX_ACTIVE_ERRORS;
+            if (state.error_list.errors[check_idx].is_active && state.error_list.errors[check_idx].severity != ErrorSeverity::CRIT) {
+                found_idx = check_idx;
+                break;
+            }
+        }
+
+        if (found_idx != -1) {
+            lv_label_set_text(w.warning_carousel_label, state.error_list.errors[found_idx].description);
+        }
+    } else {
+        lv_obj_add_flag(w.warning_carousel_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(w.warning_carousel_label, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    taskEXIT_CRITICAL(&g_error_list_mux);
+
+    // -- Critical Error Modal (v1.5) --
+    // Show instantly if any CRIT error exists. Priority: CRIT > Carousel.
+    bool crit_active = (state.bms_severity.load() == ErrorSeverity::CRIT || 
+                        state.mc_severity.load() == ErrorSeverity::CRIT);
+    
+    if (crit_active) {
+        lv_obj_clear_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
+        
+        static int crit_carousel_idx = 0;
+        static uint32_t last_crit_carousel_ms = 0;
+        
+        taskENTER_CRITICAL(&g_error_list_mux);
+
+        // Count active critical errors
+        int crit_count = 0;
+        for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+            if (state.error_list.errors[i].is_active && state.error_list.errors[i].severity == ErrorSeverity::CRIT) {
+                crit_count++;
+            }
+        }
+
+        // Rotate index every interval
+        if (millis() - last_crit_carousel_ms > carousel_interval_ms) {
+            crit_carousel_idx++;
+            last_crit_carousel_ms = millis();
+        }
+
+        // Find the next active critical error
+        int found_crit_idx = -1;
+        for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
+            int check_idx = (crit_carousel_idx + i) % MAX_ACTIVE_ERRORS;
+            if (state.error_list.errors[check_idx].is_active && state.error_list.errors[check_idx].severity == ErrorSeverity::CRIT) {
+                found_crit_idx = check_idx;
+                break;
+            }
+        }
+
+        if (found_crit_idx != -1) {
+            lv_label_set_text(w.modal_desc, state.error_list.errors[found_crit_idx].description);
+        } else {
+            lv_label_set_text(w.modal_desc, "CRITICAL FAULT");
+        }
+
+        taskEXIT_CRITICAL(&g_error_list_mux);
+    } else {
+        lv_obj_add_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
     }
 }
 

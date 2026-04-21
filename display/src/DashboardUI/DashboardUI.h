@@ -41,7 +41,16 @@
 #define MOTOR_TEMP_MIN   0
 #define MOTOR_TEMP_MAX 110
 #define MC_TEMP_MIN      0
-#define MC_TEMP_MAX     90
+#define MC_TEMP_MAX     95
+
+// ============================================================================
+// SAFETY THRESHOLDS (from @WarningErrorGuide.md)
+// ============================================================================
+
+#define MC_TEMP_WARN_CELSIUS    70.0f
+#define MC_TEMP_CRIT_CELSIUS    95.0f
+#define MOTOR_TEMP_WARN_CELSIUS 95.0f
+#define MOTOR_TEMP_CRIT_CELSIUS 110.0f
 
 // ============================================================================
 // THERMISTOR COUNT (matches mainboard Config.h)
@@ -50,6 +59,37 @@
 #ifndef DASHBOARD_THERMISTOR_COUNT
 #define DASHBOARD_THERMISTOR_COUNT CONFIG_THERMISTOR_COUNT
 #endif
+
+// ============================================================================
+// ERROR MANAGEMENT
+// ============================================================================
+
+enum class ErrorSeverity : uint8_t {
+    NONE = 0,
+    INFO = 1,
+    WARN = 2,
+    CRIT = 3
+};
+
+enum class ErrorSource : uint8_t {
+    BMS = 0,
+    MOTOR_CONTROLLER = 1,
+    MAINBOARD = 2
+};
+
+struct DashboardError {
+    ErrorSource   source;
+    ErrorSeverity severity;
+    char          description[48];
+    bool          is_active;
+};
+
+#define MAX_ACTIVE_ERRORS 8
+
+struct DashboardErrorList {
+    DashboardError errors[MAX_ACTIVE_ERRORS];
+    uint32_t       last_update_ms; // for carousel rotation
+};
 
 // ============================================================================
 // DASHBOARD DATA MODEL
@@ -117,14 +157,20 @@ struct DashboardState {
     DashboardBatteryVoltages  battery;
     DashboardGyroData         gyro;
     DashboardThermistorTemps  thermistors;
+
+    // Error Management
+    DashboardErrorList     error_list;
+    std::atomic<ErrorSeverity> bms_severity{ErrorSeverity::NONE};
+    std::atomic<ErrorSeverity> mc_severity{ErrorSeverity::NONE};
+    std::atomic<ErrorSeverity> mb_severity{ErrorSeverity::NONE};
+
     std::atomic<bool>      sd_started{};
     std::atomic<CanStatus> can_status{};  // D-01: lock-free CAN health state; default NO_DATA (ordinal 0)
 };
 
-// Spinlock protecting hv_cell_voltages[CONFIG_HV_CELL_COUNT].
-// Must be held by both the CAN write path and the logging read path.
-// Defined in CAN_Receive.cpp; used in Logging/logging.cpp.
+// Spinlocks
 extern portMUX_TYPE g_cell_voltages_mux;
+extern portMUX_TYPE g_error_list_mux; // Protects error_list updates/reads
 
 // ============================================================================
 // WIDGET HANDLE STRUCT
@@ -176,8 +222,18 @@ struct DashboardWidgets {
     // Error message
     lv_obj_t *error_label;
 
-    // BMS status
-    lv_obj_t *bms_status_label;
+    // BMS/MC status icons
+    lv_obj_t *bms_status_label; // existing
+    lv_obj_t *mc_status_icon;   // new for Phase 06
+
+    // Warning carousel (bottom-right)
+    lv_obj_t *warning_carousel_label;
+    lv_obj_t *warning_carousel_icon;
+
+    // Critical Error Pop-up
+    lv_obj_t *error_modal;
+    lv_obj_t *modal_title;
+    lv_obj_t *modal_desc;
 };
 
 // ============================================================================
@@ -195,6 +251,12 @@ void dashboard_create(void);
  * Caller MUST hold the LVGL mutex (lvgl_port_lock).
  */
 void dashboard_refresh(const DashboardState &state);
+
+/**
+ * Scan the raw CAN error bits in DashboardState and update the 
+ * internal error_list and system severities.
+ */
+void update_error_state(DashboardState *state);
 
 /**
  * FreeRTOS task entry point: reads DashboardState and refreshes the

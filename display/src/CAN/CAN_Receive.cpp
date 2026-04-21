@@ -248,4 +248,7 @@ void waveshare_twai_receive(DashboardState *state)
         (millis() - last_rx_ms) > 1000U) {
         state->can_status.store(CanStatus::TIMEOUT);
     }
+
+    // Process structured error logic after all messages are handled (v1.5)
+    update_error_state(state);
 }
