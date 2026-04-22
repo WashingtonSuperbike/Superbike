@@ -284,6 +284,17 @@ static lv_obj_t *create_icon_label(lv_obj_t *parent, const char *symbol,
 }
 
 // ============================================================================
+// HELPER: pick arc indicator color based on temperature vs thresholds
+// ============================================================================
+
+static inline lv_color_t temp_arc_color(float temp, float warn, float crit)
+{
+    if (temp >= crit) return CLR_WARN_RED;
+    if (temp >= warn) return CLR_WARN_YELLOW;
+    return CLR_MOTOR_TEMP;
+}
+
+// ============================================================================
 // HELPER: create a temperature arc (right column)
 // ============================================================================
 
@@ -370,7 +381,7 @@ void dashboard_create(void)
     lv_arc_set_mode(w.current_regen_arc, LV_ARC_MODE_REVERSE);
     lv_arc_set_range(w.current_regen_arc, 0, 100);
     lv_arc_set_value(w.current_regen_arc, 0);
-    lv_arc_set_bg_angles(w.current_regen_arc, 15, 165);       // -100A (15°) to 0A (165°)
+    lv_arc_set_bg_angles(w.current_regen_arc, 115, 165);       // -100A (115°) to 0A (165°)
     lv_arc_set_rotation(w.current_regen_arc, 0);
     lv_obj_set_style_arc_color(w.current_regen_arc, CLR_BG, LV_PART_MAIN);
     lv_obj_set_style_arc_color(w.current_regen_arc, CLR_REGEN, LV_PART_INDICATOR);
@@ -408,7 +419,7 @@ void dashboard_create(void)
     const lv_coord_t arc_y = 25;
     const lv_coord_t arc_spacing = 135;
     create_temp_arc(scr, &w.batt_temp_arc, &w.batt_temp_label,
-                    "BATT", CLR_BATT_TEMP,
+                    "BATT", CLR_MOTOR_TEMP,
                     BATT_TEMP_MIN, BATT_TEMP_MAX,
                     arc_x, arc_y);
 
@@ -418,7 +429,7 @@ void dashboard_create(void)
                     arc_x + arc_spacing, arc_y);
 
     create_temp_arc(scr, &w.mc_temp_arc, &w.mc_temp_label,
-                    "MTR CTRL", CLR_MC_TEMP,
+                    "MTR CTRL", CLR_MOTOR_TEMP,
                     MC_TEMP_MIN, MC_TEMP_MAX,
                     arc_x, arc_y + arc_spacing);
 
@@ -457,50 +468,63 @@ void dashboard_create(void)
     w.bms_status_label  = create_icon_label(scr, LV_SYMBOL_CHARGE,   CLR_STATUS_GREEN, 90,  icon_y);
     w.mc_status_icon    = create_icon_label(scr, LV_SYMBOL_SETTINGS, CLR_STATUS_GREEN, 120, icon_y);
 
-    // Logo (center bottom)
+    // Superbike logo (center bottom)
     w.logo_icon = lv_img_create(scr);
     lv_img_set_src(w.logo_icon, &logo55);
     lv_obj_set_style_img_recolor(w.logo_icon, CLR_LOGO, 0);
     lv_obj_set_style_img_recolor_opa(w.logo_icon, LV_OPA_COVER, 0);
     lv_obj_align(w.logo_icon, LV_ALIGN_BOTTOM_MID, 0, -15);
 
-    // Battery info group (MC Voltage | Pack Voltage | Icon | %)
-    // Create the battery icon first as the anchor
+    // Battery info group
+    // Create the battery icon as the anchor
     w.batt_icon = create_icon_label(scr, LV_SYMBOL_BATTERY_FULL, CLR_WHITE, 660, icon_y-5, &lv_font_montserrat_30);
     lv_obj_set_width(w.batt_icon, 50);
     lv_obj_set_style_text_align(w.batt_icon, LV_TEXT_ALIGN_CENTER, 0);
 
     // Pack Voltage (Left of icon)
+    w.batt_voltage = lv_label_create(scr);
+    lv_obj_set_width(w.batt_voltage, 100);
+    lv_obj_set_style_text_align(w.batt_voltage, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(w.batt_voltage, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.batt_voltage, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.batt_voltage, w.batt_icon, LV_ALIGN_OUT_LEFT_MID, -5, 0);
+    lv_label_set_text(w.batt_voltage, "0.0 V");
+
+    // Battery % (Right of icon)
+    w.batt_percent = lv_label_create(scr);
+    lv_obj_set_width(w.batt_percent, 80);
+    lv_obj_set_style_text_align(w.batt_percent, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(w.batt_percent, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.batt_percent, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.batt_percent, w.batt_icon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
+    lv_label_set_text(w.batt_percent, "-- %");
+
+    // Battery label (above battery icon)
     w.batt_voltage_label = lv_label_create(scr);
     lv_obj_set_width(w.batt_voltage_label, 100);
-    lv_obj_set_style_text_align(w.batt_voltage_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_align(w.batt_voltage_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(w.batt_voltage_label, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(w.batt_voltage_label, &lv_font_montserrat_24, 0);
-    lv_obj_align_to(w.batt_voltage_label, w.batt_icon, LV_ALIGN_OUT_LEFT_MID, -5, 0);
-    lv_label_set_text(w.batt_voltage_label, "0.0 V");
+    lv_obj_set_style_text_font(w.batt_voltage_label, &lv_font_montserrat_12, 0);
+    lv_obj_align_to(w.batt_voltage_label, w.batt_voltage, LV_ALIGN_OUT_TOP_MID, 10, -1);
+    lv_label_set_text(w.batt_voltage_label, "-- BATT --");
 
     // MC Voltage (Left of Pack Voltage)
+    w.mc_voltage = lv_label_create(scr);
+    lv_obj_set_width(w.mc_voltage, 100);
+    lv_obj_set_style_text_align(w.mc_voltage, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_color(w.mc_voltage, CLR_WHITE, 0);
+    lv_obj_set_style_text_font(w.mc_voltage, &lv_font_montserrat_24, 0);
+    lv_obj_align_to(w.mc_voltage, w.batt_voltage, LV_ALIGN_OUT_LEFT_MID, -10, 0);
+    lv_label_set_text(w.mc_voltage, "0.0 V");
+
+    // MC Voltage Label (above MC Voltage)
     w.mc_voltage_label = lv_label_create(scr);
     lv_obj_set_width(w.mc_voltage_label, 100);
-    lv_obj_set_style_text_align(w.mc_voltage_label, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_align(w.mc_voltage_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(w.mc_voltage_label, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(w.mc_voltage_label, &lv_font_montserrat_24, 0);
-    lv_obj_align_to(w.mc_voltage_label, w.batt_voltage_label, LV_ALIGN_OUT_LEFT_MID, -10, 0);
-    lv_label_set_text(w.mc_voltage_label, "0.0 V");
-
-    w.batt_percent_label = lv_label_create(scr);
-    lv_obj_set_width(w.batt_percent_label, 80);
-    lv_obj_set_style_text_align(w.batt_percent_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(w.batt_percent_label, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(w.batt_percent_label, &lv_font_montserrat_24, 0);
-    lv_obj_align_to(w.batt_percent_label, w.batt_icon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-    lv_label_set_text(w.batt_percent_label, "-- %");
-    lv_obj_set_width(w.batt_percent_label, 80);
-    lv_obj_set_style_text_align(w.batt_percent_label, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(w.batt_percent_label, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(w.batt_percent_label, &lv_font_montserrat_24, 0);
-    lv_obj_align_to(w.batt_percent_label, w.batt_icon, LV_ALIGN_OUT_RIGHT_MID, 5, 0);
-    lv_label_set_text(w.batt_percent_label, "-- %");
+    lv_obj_set_style_text_font(w.mc_voltage_label, &lv_font_montserrat_12, 0);
+    lv_obj_align_to(w.mc_voltage_label, w.mc_voltage, LV_ALIGN_OUT_TOP_MID, 10, -1);
+    lv_label_set_text(w.mc_voltage_label, "-- MC --");
 
     // -- Warning carousel (bottom-right above battery info) --
     int warning_y = icon_y - 110;
@@ -614,6 +638,7 @@ void dashboard_refresh(const DashboardState &state)
     int batt_temp_int = (int)s_batt_t;
     if (batt_temp_int != prev_batt_temp) {
         lv_arc_set_value(w.batt_temp_arc, batt_temp_int);
+        lv_obj_set_style_arc_color(w.batt_temp_arc, temp_arc_color(s_batt_t, BATT_TEMP_WARN_CELSIUS, BATT_TEMP_CRIT_CELSIUS), LV_PART_INDICATOR);
         snprintf(buf, sizeof(buf), "%d C", batt_temp_int);
         lv_label_set_text(w.batt_temp_label, buf);
         prev_batt_temp = batt_temp_int;
@@ -623,6 +648,7 @@ void dashboard_refresh(const DashboardState &state)
     int motor_temp_int = (int)s_motor_t;
     if (motor_temp_int != prev_motor_temp) {
         lv_arc_set_value(w.motor_temp_arc, motor_temp_int);
+        lv_obj_set_style_arc_color(w.motor_temp_arc, temp_arc_color(s_motor_t, MOTOR_TEMP_WARN_CELSIUS, MOTOR_TEMP_CRIT_CELSIUS), LV_PART_INDICATOR);
         snprintf(buf, sizeof(buf), "%d C", motor_temp_int);
         lv_label_set_text(w.motor_temp_label, buf);
         prev_motor_temp = motor_temp_int;
@@ -632,6 +658,7 @@ void dashboard_refresh(const DashboardState &state)
     int mc_temp_int = (int)s_mc_t;
     if (mc_temp_int != prev_mc_temp) {
         lv_arc_set_value(w.mc_temp_arc, mc_temp_int);
+        lv_obj_set_style_arc_color(w.mc_temp_arc, temp_arc_color(s_mc_t, MC_TEMP_WARN_CELSIUS, MC_TEMP_CRIT_CELSIUS), LV_PART_INDICATOR);
         snprintf(buf, sizeof(buf), "%d C", mc_temp_int);
         lv_label_set_text(w.mc_temp_label, buf);
         prev_mc_temp = mc_temp_int;
@@ -673,14 +700,14 @@ void dashboard_refresh(const DashboardState &state)
     int batt_mv = (int)(s_voltage * 10.0f);
     if (batt_mv != prev_batt_mv) {
         snprintf(buf, sizeof(buf), "%.1f V", s_voltage);
-        lv_label_set_text(w.batt_voltage_label, buf);
+        lv_label_set_text(w.batt_voltage, buf);
         prev_batt_mv = batt_mv;
     }
 
     int mc_mv = (int)(s_mc_v * 10.0f);
     if (mc_mv != prev_mc_mv) {
         snprintf(buf, sizeof(buf), "%.1f V", s_mc_v);
-        lv_label_set_text(w.mc_voltage_label, buf);
+        lv_label_set_text(w.mc_voltage, buf);
         prev_mc_mv = mc_mv;
     }        
 
@@ -692,7 +719,7 @@ void dashboard_refresh(const DashboardState &state)
 
     if (pct_int != prev_batt_pct) {
         snprintf(buf, sizeof(buf), "%d %%", pct_int);
-        lv_label_set_text(w.batt_percent_label, buf);
+        lv_label_set_text(w.batt_percent, buf);
 
         // Update icon symbol and color based on percentage thresholds
         const char *symbol = LV_SYMBOL_BATTERY_FULL;
@@ -758,7 +785,7 @@ void dashboard_refresh(const DashboardState &state)
     // -- Warning Carousel (v1.5) --
     static int carousel_idx = 0;
     static uint32_t last_carousel_ms = 0;
-    const uint32_t carousel_interval_ms = 2500; // 2.5 seconds
+    const uint32_t carousel_interval_ms = 1500; // 1.5 seconds
 
     taskENTER_CRITICAL(&g_error_list_mux);
     

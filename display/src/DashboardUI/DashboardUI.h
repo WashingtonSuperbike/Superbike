@@ -39,9 +39,9 @@
 #define BATT_TEMP_MIN    0
 #define BATT_TEMP_MAX   70
 #define MOTOR_TEMP_MIN   0
-#define MOTOR_TEMP_MAX 110
+#define MOTOR_TEMP_MAX 120
 #define MC_TEMP_MIN      0
-#define MC_TEMP_MAX     95
+#define MC_TEMP_MAX    100
 
 // ============================================================================
 // SAFETY THRESHOLDS (from @WarningErrorGuide.md)
@@ -51,6 +51,8 @@
 #define MC_TEMP_CRIT_CELSIUS    95.0f
 #define MOTOR_TEMP_WARN_CELSIUS 95.0f
 #define MOTOR_TEMP_CRIT_CELSIUS 110.0f
+#define BATT_TEMP_WARN_CELSIUS  50.0f
+#define BATT_TEMP_CRIT_CELSIUS  60.0f
 
 // ============================================================================
 // THERMISTOR COUNT (matches mainboard Config.h)
@@ -204,9 +206,11 @@ struct DashboardWidgets {
     lv_obj_t *gyro_label;
 
     // Battery info (bottom-right)
-    lv_obj_t *mc_voltage_label;   // Motor controller voltage
-    lv_obj_t *batt_voltage_label; // Series voltage
-    lv_obj_t *batt_percent_label;
+    lv_obj_t *mc_voltage;
+    lv_obj_t *mc_voltage_label;
+    lv_obj_t *batt_voltage;
+    lv_obj_t *batt_voltage_label;
+    lv_obj_t *batt_percent;
     lv_obj_t *batt_icon;
 
     // Stopwatch
