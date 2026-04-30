@@ -14,7 +14,7 @@
 #define TX_PIN 15
 
 // Intervall:
-#define POLLING_RATE_MS 1000
+#define POLLING_RATE_MS 500
 
 bool waveshare_twai_init();
 void waveshare_twai_receive(DashboardState *state);

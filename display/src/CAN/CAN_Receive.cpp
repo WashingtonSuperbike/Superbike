@@ -37,6 +37,7 @@ static void decodeMotorTemps(twai_message_t msg, DashboardMotorTemps *temps)
     temps->motor_controller_temperature = msg.data[1] - 40;
     temps->motor_temperature            = msg.data[2] - 30;
     temps->controller_status            = msg.data[4];
+    temps->switch_status                = msg.data[5];
 }
 
 static void decipherBMSStatus(twai_message_t msg, DashboardBMSStatus *bms)

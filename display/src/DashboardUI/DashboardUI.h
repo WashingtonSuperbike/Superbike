@@ -55,7 +55,7 @@
 #define BATT_TEMP_CRIT_CELSIUS  60.0f
 
 // ============================================================================
-// THERMISTOR COUNT (matches mainboard Config.h)
+// THERMISTOR COUNT (mirrors Config.h)
 // ============================================================================
 
 #ifndef DASHBOARD_THERMISTOR_COUNT
@@ -111,6 +111,7 @@ struct DashboardMotorTemps {
     float motor_controller_temperature;
     float motor_temperature;
     uint8_t controller_status;
+    uint8_t switch_status;
 };
 
 struct DashboardBMSStatus {
@@ -124,7 +125,7 @@ struct DashboardBMSStatus {
 struct DashboardBatteryVoltages {
     float hv_series_voltage;
     float aux_battery_voltage;
-    float hv_cell_voltages[CONFIG_HV_CELL_COUNT];  // populated by CAN receive path only
+    float hv_cell_voltages[CONFIG_HV_CELL_COUNT];
 };
 
 struct DashboardGyroData {

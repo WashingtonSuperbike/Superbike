@@ -53,8 +53,8 @@ static DashboardWidgets w;
 // v1.6 Data Smoothing Filters
 static EMAFilter f_rpm(0.5f);
 static EMAFilter f_current(0.5f);
-static EMAFilter f_voltage(1.5f);
-static EMAFilter f_mc_voltage(1.5f);
+static EMAFilter f_batt_voltage(0.5f);
+static EMAFilter f_mc_voltage(0.5f);
 static EMAFilter f_batt_temp(2.0f);
 static EMAFilter f_motor_temp(2.0f);
 static EMAFilter f_mc_temp(2.0f);
@@ -159,72 +159,72 @@ void update_error_state(DashboardState *state)
 
     // Only check LTC count if we are actually receiving CAN data
     if (state->can_status.load() == CanStatus::RECEIVING && state->bms.ltc_count == 0) {
-        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::CRIT, "BMS: PACK INCOMPLETE");
-        max_bms = ErrorSeverity::CRIT;
+        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: LTCS NOT DETECTED");
+        if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
     }
 
     // --- Motor Controller Errors ---
     uint16_t mc_err = (uint16_t)state->motor.error_message;
     // Byte 7 (low byte of error_message)
     if (mc_err & 0x01) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: ID ANGLE FAULT");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC ID ANGLE FAULT NEEDS CALIBRATION");
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
     }
     if (mc_err & 0x02) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: OVER VOLTAGE");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC OVER VOLTAGE PROTECTION");
         max_mc = ErrorSeverity::CRIT;
     }
     if (mc_err & 0x04) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: LOW VOLTAGE");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
-    }
-    if (mc_err & 0x08) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: ANGLE SENSOR FAULT");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC LOW VOLTAGE");
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
     }
     if (mc_err & 0x10) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: STALL FAULT");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
-    }
-    if (mc_err & 0x20) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: INTERNAL VOLTS");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
-    }
-    if (mc_err & 0x80) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: THROTTLE AT PWRUP");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
-    }
-
-    // Byte 8 (high byte of error_message)
-    if (mc_err & 0x0200) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: INTERNAL RESET");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
-    }
-    if (mc_err & 0x0400) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: THROTTLE CIRCUIT");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MOTOR STALL");
         max_mc = ErrorSeverity::CRIT;
     }
-    if (mc_err & 0x8000) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: GALVANOMETER FAULT");
+    if (mc_err & 0x20) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC INTERNAL VOLTAGE FAULT");
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    // Over-temp error handled below (0x40)
+    if (mc_err & 0x80) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "THROTTLE DISABLED. RELEASE TO RESET.");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x200) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC INTERNAL RESET CONTINUE DRIVING");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x400) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "THROTTLE SHORT OR OPEN CIRCUIT");
+        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+    }
+    if (mc_err & 0x800) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "ANGLE SENSOR ERROR");
+        max_mc = ErrorSeverity::CRIT;
+    }
+    // Motor over temperature handled below (0x4000)
+    if (mc_err & 0x8000) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "HALL GALVANOMETER ERROR");
+        max_mc = ErrorSeverity::CRIT;
     }
 
     // Temperature Escalations (using #defined thresholds)
     float mc_temp = state->temps.motor_controller_temperature;
-    if (mc_temp >= MC_TEMP_CRIT_CELSIUS || (mc_err & 0x40)) { // 0x40 is OverTemp bit in Byte 7
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC: OVER-TEMP CRITICAL");
+    if (mc_temp >= MC_TEMP_CRIT_CELSIUS || (mc_err & 0x40)) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MC OVER TEMP SHUTDOWN");
         max_mc = ErrorSeverity::CRIT;
     } else if (mc_temp >= MC_TEMP_WARN_CELSIUS) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC: OVER-TEMP WARNING");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MC HIGH TEMP");
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
     }
 
     float motor_temp = state->temps.motor_temperature;
-    if (motor_temp >= MOTOR_TEMP_CRIT_CELSIUS || (mc_err & 0x4000)) { // 0x4000 is Motor OverTemp bit in Byte 8
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MOTOR: OVER-TEMP CRITICAL");
+    if (motor_temp >= MOTOR_TEMP_CRIT_CELSIUS || (mc_err & 0x4000)) {
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "MOTOR OVER TEMP SHUTDOWN");
         max_mc = ErrorSeverity::CRIT;
     } else if (motor_temp >= MOTOR_TEMP_WARN_CELSIUS) {
-        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MOTOR: OVER-TEMP WARNING");
+        add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::WARN, "MOTOR HIGH TEMP");
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
     }
 
@@ -307,7 +307,7 @@ static void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,
     lv_obj_set_size(*arc, 110, 110);
     lv_arc_set_range(*arc, min_val, max_val);
     lv_arc_set_value(*arc, min_val);
-    lv_arc_set_bg_angles(*arc, 135, 45);          // 270 degree sweep
+    lv_arc_set_bg_angles(*arc, 135, 45);
     lv_obj_set_style_arc_color(*arc, lv_color_make(0x30, 0x30, 0x30), LV_PART_MAIN);
     lv_obj_set_style_arc_color(*arc, color, LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(*arc, 10, LV_PART_MAIN);
@@ -448,7 +448,7 @@ void dashboard_create(void)
     lv_obj_set_pos(w.gyro_arc, arc_x + arc_spacing, arc_y + arc_spacing);
 
     w.gyro_label = lv_label_create(w.gyro_arc);
-    lv_label_set_text(w.gyro_label, "0");
+    lv_label_set_text(w.gyro_label, "0 deg");
     lv_obj_set_style_text_color(w.gyro_label, CLR_WHITE, 0);
     lv_obj_set_style_text_font(w.gyro_label, &lv_font_montserrat_16, 0);
     lv_obj_center(w.gyro_label);
@@ -589,7 +589,7 @@ void dashboard_refresh(const DashboardState &state)
     if (prev_speed == -1) {
         f_rpm.reset(state.motor.RPM);
         f_current.reset(state.motor.motor_current);
-        f_voltage.reset(state.battery.hv_series_voltage);
+        f_batt_voltage.reset(state.battery.hv_series_voltage);
         f_mc_voltage.reset(state.motor.motor_controller_battery_voltage);
         f_gyro.reset(state.gyro.roll_angle);
         f_motor_temp.reset(state.temps.motor_temperature);
@@ -604,7 +604,7 @@ void dashboard_refresh(const DashboardState &state)
 
     float s_rpm     = f_rpm.update(state.motor.RPM);
     float s_current = f_current.update(state.motor.motor_current);
-    float s_voltage = f_voltage.update(state.battery.hv_series_voltage);
+    float s_voltage = f_batt_voltage.update(state.battery.hv_series_voltage);
     float s_mc_v    = f_mc_voltage.update(state.motor.motor_controller_battery_voltage);
     float s_gyro    = f_gyro.update(state.gyro.roll_angle);
     float s_motor_t = f_motor_temp.update(state.temps.motor_temperature);
