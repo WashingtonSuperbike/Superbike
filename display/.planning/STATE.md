@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.6
-milestone_name: Data Smoothing
-status: shipped
-stopped_at: Milestone v1.6 archived — ready for next milestone
+milestone: v1.7
+milestone_name: Screen Separation
+status: planning
+stopped_at: Milestone v1.7 started — defining requirements
 last_updated: "2026-05-05T00:00:00.000Z"
 last_activity: 2026-05-05
 progress:
-  total_phases: 11
-  completed_phases: 11
-  total_plans: 19
-  completed_plans: 19
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,12 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-05)
 
 **Core value**: A self-contained display module that presents live telemetry clearly — the rider's window into the motorcycle's state.
-**Current focus**: Planning next milestone
+**Current focus**: Milestone v1.7 Screen Separation
 
 ## Current Position
 
-Milestone v1.6 Data Smoothing shipped 2026-05-05.
-All 11 phases complete. Ready for `/gsd-new-milestone`.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-05 — Milestone v1.7 started
 
 Progress: [██████████] 100% — all milestones through v1.6 complete
 
