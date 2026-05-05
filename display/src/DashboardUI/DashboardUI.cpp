@@ -50,15 +50,13 @@
 
 static DashboardWidgets w;
 
-// v1.6 Data Smoothing Filters
-static EMAFilter f_rpm(0.5f);
-static EMAFilter f_current(0.5f);
-static EMAFilter f_batt_voltage(0.5f);
-static EMAFilter f_mc_voltage(0.5f);
-static EMAFilter f_batt_temp(2.0f);
-static EMAFilter f_motor_temp(2.0f);
-static EMAFilter f_mc_temp(2.0f);
-static EMAFilter f_gyro(0.25f);
+// Anti-flicker EMA filters (tau=0.1s @ 30 Hz: alpha≈0.28, 95% settle≈0.3s)
+// Temperatures are raw — physical inertia prevents inter-frame flicker.
+static EMAFilter f_rpm(0.1f);
+static EMAFilter f_current(0.1f);
+static EMAFilter f_batt_voltage(0.1f);
+static EMAFilter f_mc_voltage(0.1f);
+static EMAFilter f_gyro(0.1f);
 
 // Previous values for dirty-checking (only redraw when changed)
 static int prev_speed = -1;
@@ -158,10 +156,10 @@ void update_error_state(DashboardState *state)
     }
 
     // Only check LTC count if we are actually receiving CAN data
-    if (state->can_status.load() == CanStatus::RECEIVING && state->bms.ltc_count == 0) {
-        add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: LTCS NOT DETECTED");
-        if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
-    }
+    // if (state->can_status.load() == CanStatus::RECEIVING && state->bms.ltc_count == 0) {
+    //     add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, "BMS: LTCS NOT DETECTED");
+    //     if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+    // }
 
     // --- Motor Controller Errors ---
     uint16_t mc_err = (uint16_t)state->motor.error_message;
@@ -592,14 +590,6 @@ void dashboard_refresh(const DashboardState &state)
         f_batt_voltage.reset(state.battery.hv_series_voltage);
         f_mc_voltage.reset(state.motor.motor_controller_battery_voltage);
         f_gyro.reset(state.gyro.roll_angle);
-        f_motor_temp.reset(state.temps.motor_temperature);
-        f_mc_temp.reset(state.temps.motor_controller_temperature);
-        
-        float max_t = 0;
-        for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
-            if (state.thermistors.temps[i] > max_t) max_t = state.thermistors.temps[i];
-        }
-        f_batt_temp.reset(max_t);
     }
 
     float s_rpm     = f_rpm.update(state.motor.RPM);
@@ -607,15 +597,14 @@ void dashboard_refresh(const DashboardState &state)
     float s_voltage = f_batt_voltage.update(state.battery.hv_series_voltage);
     float s_mc_v    = f_mc_voltage.update(state.motor.motor_controller_battery_voltage);
     float s_gyro    = f_gyro.update(state.gyro.roll_angle);
-    float s_motor_t = f_motor_temp.update(state.temps.motor_temperature);
-    float s_mc_t    = f_mc_temp.update(state.temps.motor_controller_temperature);
+    float s_motor_t = state.temps.motor_temperature;
+    float s_mc_t    = state.temps.motor_controller_temperature;
 
-    float max_batt_temp = 0;
+    float s_batt_t = 0;
     for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
-        if (state.thermistors.temps[i] > max_batt_temp)
-            max_batt_temp = state.thermistors.temps[i];
+        if (state.thermistors.temps[i] > s_batt_t)
+            s_batt_t = state.thermistors.temps[i];
     }
-    float s_batt_t = f_batt_temp.update(max_batt_temp);
 
     // -- Speed (needle + digital label) --
     int speed = rpm_to_mph(s_rpm);

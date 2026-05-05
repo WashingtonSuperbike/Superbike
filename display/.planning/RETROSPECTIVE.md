@@ -90,6 +90,48 @@
 
 ---
 
+## Milestone: v1.6 — Data Smoothing
+
+**Shipped:** 2026-05-05
+**Phases:** 3 (09-11) | **Plans:** 9 | **Commits:** 4
+
+### What Was Built
+
+- **EMAFilter utility class** — O(1), 4-byte state per signal, `alpha = 1 - exp(-dt/tau)`, `reset()` snap-to init to avoid boot ramps
+- **Anti-flicker display smoothing** — τ=0.1s applied to RPM, current, voltages, gyro; eliminates adjacent-integer flicker with imperceptible 0.3s settle
+- **Raw temperature display** — battery, motor, MC temps switched to raw values; eliminated 2–6s visual lag from original 2.0s tau filters
+- **Temperature arc threshold colors** — arc indicator dynamically colors green/yellow/red based on per-sensor warn/crit thresholds
+
+### What Worked
+
+- **Post-validation retuning** — The validate-phase workflow surfaced the mismatch between stated requirements (grouped time constants) and actual UX (sluggish needle, laggy temps). Fixing it immediately kept the milestone honest rather than shipping a known degraded experience.
+- **Raw temperatures** — removing filtering from slow-moving physical quantities was the right call; thermal inertia is the "filter" — no code needed.
+- **Single uniform tau** — replacing four different time constant groups with one anti-flicker policy (τ=0.1s) simplified the mental model significantly.
+
+### What Was Inefficient
+
+- **Original time constant spec was untested** — The v1.6 requirements defined grouped tau values (0.25s–5.0s) without analyzing the 30 Hz update rate. If EMA settling time math had been worked through at planning time, the 2.0s temp tau and 0.5s RPM tau would never have been specced. 
+- **No phase artifact directories** — Phases 09-11 were implemented without formal GSD PLAN/SUMMARY files. This made the validate-phase workflow harder (State C detection) and left no structured record of execution decisions.
+
+### Patterns Established
+
+- **EMA time constant = 63% rise time, not settle time** — The 95% settle is 3× tau. Always communicate settle time, not tau, when discussing "how long does smoothing take."
+- **Anti-flicker tau sweet spot** — τ=0.1s at 30 Hz (alpha≈0.28) reduces noise amplitude to ~40% of raw while remaining visually imperceptible. Use as default for any future display signal that flickers between adjacent values.
+- **Physical inertia as the filter** — Temperatures, pressures, and other physically slow-changing signals don't need EMA. Raw is better — no lag, no complexity.
+
+### Key Lessons
+
+1. **Spec smoothing in terms of settle time, not tau** — Saying "0.5s smoothing" is ambiguous; "95% settle in 1.5s" is what the rider experiences. Use the right unit at requirements time.
+2. **Validate time constants against update rate** — tau × UPDATE_RATE_HZ determines alpha. An alpha of 0.065 (tau=0.5s at 30 Hz) is nearly a 15-sample average — far more aggressive than "half a second" sounds.
+3. **Run validation promptly after implementation** — The filter tuning issue was caught at milestone completion; earlier validation would have caught it before the requirements archived incorrect time constants.
+
+### Cost Observations
+
+- Sessions: 2 (implementation + validation/fix)
+- Notable: validate-phase workflow was the correct entry point for user feedback — surfaced a real UX problem and provided a structured path to resolution
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -99,6 +141,8 @@
 | v1.1 | 1 | 1 | Baseline — single plan, no review pipeline |
 | v1.2 | 2 | 4 | Added code-review → fix → verify pipeline; gap closure as explicit plan type |
 | v1.3 | 1 | 3 | Full recovery state machine; alert-driven health tracking; stack-depth awareness |
+| v1.5 | 4 | 10 | Error/warning framework; modal + carousel UI patterns for safety-critical alerts |
+| v1.6 | 3 | 9 | EMA anti-flicker utility; validate-phase as UX feedback loop; spec in settle time not tau |
 
 ### Top Lessons (Verified Across Milestones)
 
