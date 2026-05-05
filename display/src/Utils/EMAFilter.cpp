@@ -8,8 +8,8 @@ EMAFilter::EMAFilter(float time_constant_sec)
         alpha_ = 1.0f; // No smoothing
     } else {
         // alpha = 1 - exp(-dt / tau)
-        // where dt = 1 / UPDATE_RATE_HZ
-        alpha_ = 1.0f - expf(-1.0f / (time_constant_sec * UPDATE_RATE_HZ));
+        // where dt = 1 / REFRESH_RATE_HZ
+        alpha_ = 1.0f - expf(-1.0f / (time_constant_sec * REFRESH_RATE_HZ));
     }
 }
 

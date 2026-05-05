@@ -146,7 +146,7 @@ void update_error_state(DashboardState *state)
     }
     
     // Check thermistor array for overheating
-    for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
+    for (int i = 0; i < CONFIG_THERMISTOR_COUNT; i++) {
         if (state->thermistors.temps[i] >= BATT_TEMP_MAX) { // Using gauge max as warning threshold
             char t_buf[32];
             snprintf(t_buf, sizeof(t_buf), "BMS: THERMISTOR %d HOT", i);
@@ -575,7 +575,7 @@ void dashboard_create(void)
 
 static int rpm_to_mph(float rpm)
 {
-    return (int)(rpm / GEAR_RATIO * (float)M_PI * WHEEL_DIAM_M / 60.0f * MPH_CONVERT);
+    return (int)(rpm / GEAR_RATIO * (float)M_PI * WHEEL_DIAM_M / 60.0f * MS_TO_MPH);
 }
 
 void dashboard_refresh(const DashboardState &state)
@@ -601,7 +601,7 @@ void dashboard_refresh(const DashboardState &state)
     float s_mc_t    = state.temps.motor_controller_temperature;
 
     float s_batt_t = 0;
-    for (int i = 0; i < DASHBOARD_THERMISTOR_COUNT; i++) {
+    for (int i = 0; i < CONFIG_THERMISTOR_COUNT; i++) {
         if (state.thermistors.temps[i] > s_batt_t)
             s_batt_t = state.thermistors.temps[i];
     }
@@ -868,7 +868,7 @@ void dashboard_refresh(const DashboardState &state)
 }
 
 // ============================================================================
-// dashboardTask()  -- FreeRTOS task that refreshes the UI at ~20 Hz
+// dashboardTask() -- FreeRTOS task that refreshes the UI
 // ============================================================================
 
 void dashboardTask(void *param)
@@ -880,6 +880,6 @@ void dashboardTask(void *param)
             dashboard_refresh(*state);
             lvgl_port_unlock();
         }
-        vTaskDelay(pdMS_TO_TICKS(1000 / UPDATE_RATE_HZ));
+        vTaskDelay(pdMS_TO_TICKS(1000 / REFRESH_RATE_HZ));
     }
 }

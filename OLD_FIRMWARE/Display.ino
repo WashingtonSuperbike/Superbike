@@ -73,7 +73,7 @@ void displayUpdate(Context *context) {
     // Gear ratio, 48 teeth in the back wheel sprocoket. 16 on motor sprocket
     // Diameter = 0.522 m, divided by 60 converts it into per second, so the RPM is converted to a final
     // Speed of m/s
-    int newSpeed = (int)(newRPM / GEAR_RATIO * PI * DIAMETER / 60 * MPH_CONVERT);
+    int newSpeed = (int)(newRPM / GEAR_RATIO * PI * DIAMETER / 60 * MS_TO_MPH);
     if (eraseThenPrintIfDiff(175, 0, oldSpeed, newSpeed)) {
       oldSpeed = newSpeed;
     }

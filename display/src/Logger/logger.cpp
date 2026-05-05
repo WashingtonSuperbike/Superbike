@@ -37,7 +37,7 @@ static bool writeRow(FsFile &file, const DashboardState &state)
 {
     // Speed: RPM -> mph using drivetrain constants
     float speed_mph = state.motor.RPM / GEAR_RATIO
-                      * (float)M_PI * WHEEL_DIAM_M / 60.0f * MPH_CONVERT;
+                      * (float)M_PI * WHEEL_DIAM_M / 60.0f * MS_TO_MPH;
 
     // Snapshot cell voltages under spinlock (written by CAN path, read here)
     float cells[CONFIG_HV_CELL_COUNT];

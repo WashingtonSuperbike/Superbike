@@ -91,7 +91,7 @@ static void decipherThermistors(twai_message_t msg, DashboardThermistorTemps *th
     byte *currentThermistor = &msg.data[3];
     for (int i = 0; i < 5; i++) {
         int idx = i + 5 * ltcID;
-        if (idx < DASHBOARD_THERMISTOR_COUNT) {
+        if (idx < CONFIG_THERMISTOR_COUNT) {
             thermistors->temps[idx] = currentThermistor[i];
         }
     }

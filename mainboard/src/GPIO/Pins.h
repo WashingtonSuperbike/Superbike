@@ -142,15 +142,6 @@
 /// Each row of data is a factor of 16 pixels away from each other, vertically
 #define VERTICAL_SCALER 16
 
-/// Gear ratio: 48 teeth in the back wheel sprocket, 16 on motor sprocket
-#define GEAR_RATIO (48.0 / 16.0)
-
-/// Wheel diameter in meters
-#define DIAMETER 0.522
-
-/// Conversion factor for m/s to MPH
-#define MPH_CONVERT 2.2369362920544
-
 // Touch screen calibration parameters (unused but kept for reference)
 #define TS_MINX 327
 #define TS_MAXX 3903

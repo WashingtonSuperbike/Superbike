@@ -59,7 +59,7 @@
 // Speed of m/s
 #define GEAR_RATIO (48.0 / 16.0)
 #define DIAMETER 0.522
-#define MPH_CONVERT 2.2369362920544
+#define MS_TO_MPH 2.2369362920544
 
 // Touch screen parameters.
 /// Not sure why this is so high. Google it, but as of now it's unused.

@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <atomic>
 #include "Config.h"
+#include "Constants.h"
 #include "freertos/FreeRTOS.h"
 
 // ============================================================================
@@ -25,42 +26,15 @@
 #define LV_SYMBOL_CAN_LINK "\xEF\x83\x81"
 
 // ============================================================================
-// DRIVE-TRAIN CONSTANTS (from old firmware, used for speed calculation)
-// ============================================================================
-
-#define GEAR_RATIO    (48.0f / 16.0f)
-#define WHEEL_DIAM_M  0.522f           // wheel diameter in metres
-#define MPH_CONVERT   2.2369362920544f // m/s -> mph
-
-// ============================================================================
 // TEMPERATURE GAUGE RANGES
 // ============================================================================
 
-#define BATT_TEMP_MIN    0
-#define BATT_TEMP_MAX   70
-#define MOTOR_TEMP_MIN   0
-#define MOTOR_TEMP_MAX 120
-#define MC_TEMP_MIN      0
-#define MC_TEMP_MAX    100
-
-// ============================================================================
-// SAFETY THRESHOLDS (from @WarningErrorGuide.md)
-// ============================================================================
-
-#define MC_TEMP_WARN_CELSIUS    70.0f
-#define MC_TEMP_CRIT_CELSIUS    95.0f
-#define MOTOR_TEMP_WARN_CELSIUS 95.0f
-#define MOTOR_TEMP_CRIT_CELSIUS 110.0f
-#define BATT_TEMP_WARN_CELSIUS  50.0f
-#define BATT_TEMP_CRIT_CELSIUS  60.0f
-
-// ============================================================================
-// THERMISTOR COUNT (mirrors Config.h)
-// ============================================================================
-
-#ifndef DASHBOARD_THERMISTOR_COUNT
-#define DASHBOARD_THERMISTOR_COUNT CONFIG_THERMISTOR_COUNT
-#endif
+#define BATT_TEMP_MIN   (0)
+#define BATT_TEMP_MAX   (BATT_TEMP_CRIT_CELSIUS + 5.0f)
+#define MOTOR_TEMP_MIN  (0)
+#define MOTOR_TEMP_MAX  (MOTOR_TEMP_CRIT_CELSIUS + 5.0f)
+#define MC_TEMP_MIN     (0)
+#define MC_TEMP_MAX     (MC_TEMP_CRIT_CELSIUS + 5.0f)
 
 // ============================================================================
 // ERROR MANAGEMENT
@@ -135,7 +109,7 @@ struct DashboardGyroData {
 };
 
 struct DashboardThermistorTemps {
-    float temps[DASHBOARD_THERMISTOR_COUNT];
+    float temps[CONFIG_THERMISTOR_COUNT];
 };
 
 // CAN bus health state — updated atomically by CAN_Receive task, read by dashboard task.
@@ -263,6 +237,6 @@ void update_error_state(DashboardState *state);
 
 /**
  * FreeRTOS task entry point: reads DashboardState and refreshes the
- * dashboard at ~10 Hz. Pass a DashboardState* as the task parameter.
+ * dashboard at ~30 Hz. Pass a DashboardState* as the task parameter.
  */
 void dashboardTask(void *param);
