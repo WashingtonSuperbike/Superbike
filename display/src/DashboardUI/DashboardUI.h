@@ -90,6 +90,8 @@ struct DashboardState {
     BatteryVoltages  battery;
     GyroData         gyro;
     ThermistorTemps  thermistors;
+    ChargeControllerStats evcc;
+    ChargerStats     charger;
 
     // Error Management
     ErrorList     error_list;

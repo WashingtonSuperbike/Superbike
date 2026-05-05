@@ -23,8 +23,8 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
         &state->motor,
         &state->temps,
         &state->bms,
-        nullptr, // EVCC
-        nullptr, // Charger
+        &state->evcc,
+        &state->charger,
         &state->thermistors,
         &state->battery,
         &g_cell_voltages_mux
