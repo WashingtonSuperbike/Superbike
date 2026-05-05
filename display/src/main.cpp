@@ -150,28 +150,29 @@ void setup()
         Serial.println("TWAI driver initialization failed");
     }
 
-    // Dashboard refresh task: reads dashState at 10 Hz
+    // Dashboard refresh task
     xTaskCreatePinnedToCore(
         dashboardTask,
         "dash_refresh",
         4096,
         &dashState,
-        2,
+        1,
         NULL,
         1
     );
 
-    // Simulation task: animates gauge values including 24 cell voltages (D-03)
-    xTaskCreatePinnedToCore(
-        simulationTask,
-        "dash_sim",
-        4096,
-        NULL,
-        1,
-        NULL,
-        0
-    );
+    // Simulation task
+    // xTaskCreatePinnedToCore(
+    //     simulationTask,
+    //     "dash_sim",
+    //     4096,
+    //     NULL,
+    //     1,
+    //     NULL,
+    //     1
+    // );
 
+    // TWAI receive task
     xTaskCreatePinnedToCore(
         [](void *param) {
             DashboardState *state = (DashboardState *)param;
@@ -181,14 +182,14 @@ void setup()
             }
         },
         "twai_recv",
-        6144,   // bumped from 4096: recovery sequences (stop/uninstall/install/start/reconfigure_alerts) add stack depth
+        8192,
         &dashState,
         1,
         NULL,
-        0
+        1
     );
 
-    // SD card mount poll task: checks every 500ms, updates dashState.sd_started
+    // SD card mount poll task
     xTaskCreatePinnedToCore(
         sd_poll_task,
         "sd_poll",
@@ -196,18 +197,18 @@ void setup()
         &dashState,
         1,
         NULL,
-        0   // Core 0 — avoids SPI contention with LVGL on Core 1
+        1
     );
 
-    // CSV logging task: writes telemetry at 20 Hz, polls sd_started for card events
+    // CSV logging task
     xTaskCreatePinnedToCore(
         logger_task,
         "csv_log",
-        8192,   // snprintf(512) + SdFat write cache exceeds 4K under worst-case alignment
+        8192,
         &dashState,
         1,
         NULL,
-        0   // Core 0 — SdFat must not contend with LVGL on Core 1
+        1
     );
 
     Serial.println("Dashboard running");

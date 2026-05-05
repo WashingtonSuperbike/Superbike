@@ -29,7 +29,7 @@ static void decodeMotorStats(twai_message_t msg, DashboardMotorStats *motor)
 
 static void decodeMotorTemps(twai_message_t msg, DashboardMotorTemps *temps)
 {
-    if (msg.data_length_code < 5) {
+    if (msg.data_length_code < 6) {
         Serial.printf("Invalid MOTOR_TEMPS message length: %d\n", msg.data_length_code);
         return;
     }
@@ -68,7 +68,7 @@ static void decipherCellsVoltage(twai_message_t msg, DashboardBatteryVoltages *b
     uint16_t *buf = (uint16_t *)msg.data;
     taskENTER_CRITICAL(&g_cell_voltages_mux);
     for (int i = 0; i < 4; i++) {
-        if (i + totalOffset < CONFIG_HV_CELL_COUNT) {
+        if (totalOffset >= 0 && i + totalOffset < CONFIG_HV_CELL_COUNT) {
             battery->hv_cell_voltages[i + totalOffset] = ((float)buf[i]) / 10000.0f;
         }
     }

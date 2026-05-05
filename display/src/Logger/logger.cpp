@@ -117,7 +117,7 @@ void logger_task(void *param)
         if (prev_sd_started && !sd_now) {
             if (file_open) {
                 SemaphoreHandle_t mtx = sd_get_spi_mutex();
-                if (xSemaphoreTake(mtx, pdMS_TO_TICKS(50)) == pdTRUE) {
+                if (xSemaphoreTake(mtx, pdMS_TO_TICKS(2100)) == pdTRUE) {
                     logFile.close();
                     xSemaphoreGive(mtx);
                 }

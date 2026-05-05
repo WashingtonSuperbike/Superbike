@@ -24,7 +24,7 @@
 /// \note NOTE: COMMENT THIS OUT TO CHANGE DISPLAY TYPE TO SPEEDOMETER!
 // #define USE_DEBUGGING_SCREEN
 
-#define UPDATE_RATE_HZ 20.0f
+#define UPDATE_RATE_HZ 30.0f
 
 /// This exists to be changed based on the final number of thermistors
 /// we settle on having in the code later.
