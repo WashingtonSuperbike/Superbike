@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Screen Separation
 status: planning
-stopped_at: Milestone v1.7 started — defining requirements
+stopped_at: Roadmap created — ready to plan Phase 12
 last_updated: "2026-05-05T00:00:00.000Z"
 last_activity: 2026-05-05
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-05)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 12 — Screen Transition Validation (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-05 — Milestone v1.7 started
+Status: Roadmap created, ready to plan
+Last activity: 2026-05-05 — Roadmap for v1.7 created
 
-Progress: [██████████] 100% — all milestones through v1.6 complete
+Progress: [░░░░░░░░░░] 0% — v1.7 phases 12-15 pending
 
 ## Accumulated Context
 
@@ -39,6 +39,9 @@ Progress: [██████████] 100% — all milestones through v1.6 
 - [v1.6]: Anti-flicker policy: τ=0.1s uniform for speed/voltages/current/gyro.
 - [v1.6]: Temperatures raw — physical inertia is sufficient, no EMA needed.
 - [v1.6]: Spec EMA smoothing in settle time (3×tau), not tau value.
+- [v1.7]: Validation phase runs before any refactor — verify correctness first, then touch code structure.
+- [v1.7]: Shared infra header extracted (Phase 13) before per-screen files created (Phase 14) — dependency order prevents include-cycle errors.
+- [v1.7]: EMA filter instances and dirty-check statics move to DriveScreen.cpp after refactor.
 
 ### Quick Tasks Completed
 
@@ -48,4 +51,4 @@ Progress: [██████████] 100% — all milestones through v1.6 
 
 ## Session Continuity
 Last session: 2026-05-05
-Stopped at: v1.6 milestone complete. Next: `/gsd-new-milestone`
+Stopped at: v1.7 roadmap created. Next: `/gsd-plan-phase 12`

@@ -48,17 +48,17 @@ Validate the charging and drive screen implementations (including debug override
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| VAL-01 | — | Pending |
-| VAL-02 | — | Pending |
-| VAL-03 | — | Pending |
-| VAL-04 | — | Pending |
-| VAL-05 | — | Pending |
-| VAL-06 | — | Pending |
-| VAL-07 | — | Pending |
-| VAL-08 | — | Pending |
-| REF-01 | — | Pending |
-| REF-02 | — | Pending |
-| REF-03 | — | Pending |
-| REF-04 | — | Pending |
-| REF-05 | — | Pending |
-| REF-06 | — | Pending |
+| VAL-01 | Phase 12 | Pending |
+| VAL-02 | Phase 12 | Pending |
+| VAL-03 | Phase 12 | Pending |
+| VAL-04 | Phase 12 | Pending |
+| VAL-05 | Phase 12 | Pending |
+| VAL-06 | Phase 12 | Pending |
+| VAL-07 | Phase 12 | Pending |
+| VAL-08 | Phase 15 | Pending |
+| REF-01 | Phase 14 | Pending |
+| REF-02 | Phase 14 | Pending |
+| REF-03 | Phase 13 | Pending |
+| REF-04 | Phase 14 | Pending |
+| REF-05 | Phase 14 | Pending |
+| REF-06 | Phase 15 | Pending |
