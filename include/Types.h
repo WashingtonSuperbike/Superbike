@@ -24,12 +24,6 @@ struct PreChargeTaskData;
 struct DisplayTaskData;
 
 // ============================================================================
-// BASIC TYPE ALIASES
-// ============================================================================
-
-typedef uint8_t byte;
-
-// ============================================================================
 // ENUMS
 // ============================================================================
 
@@ -73,10 +67,10 @@ enum PRINT_TYPE {
  * error_message: error status bits reported by controller
  */
 struct MotorStats {
-  float RPM;
+  uint16_t RPM;
   float motor_current;
   float motor_controller_battery_voltage;
-  int error_message;
+  uint16_t error_message;
 };
 
 /**
@@ -85,13 +79,16 @@ struct MotorStats {
  * throttle: throttle applied (range TBD after testing)
  * motor_controller_temperature: temperature of motor controller in Celsius
  * motor_temperature: temperature of motor in Celsius
- * controller_status: status bits reported by controller (not errors)
+ * controller_status: status bits reported by controller (forward/backward, etc.)
+ * switch_status: status of controller's internal switches (i.e. boost switch, foot switch,
+ *                forward/backward switch, etc.)
  */
 struct MotorTemps {
-  float throttle;
-  float motor_controller_temperature;
-  float motor_temperature;
-  byte controller_status;
+  uint8_t throttle;
+  uint8_t motor_controller_temperature;
+  uint8_t motor_temperature;
+  uint8_t controller_status;
+  uint8_t switch_status;
 };
 
 // ============================================================================
@@ -106,7 +103,7 @@ struct MotorTemps {
  * charge_current: current the charge controller is telling charger to use
  */
 struct ChargeControllerStats {
-  byte en;
+  uint8_t en;
   float charge_voltage;
   float charge_current;
 };
@@ -120,8 +117,8 @@ struct ChargeControllerStats {
  * charger_temp: charger temperature
  */
 struct ChargerStats {
-  byte status_flag;
-  byte charge_flag;
+  uint8_t status_flag;
+  uint8_t charge_flag;
   float output_voltage;
   float output_current;
   int8_t charger_temp;
@@ -141,12 +138,11 @@ struct ChargerStats {
  * ltc_count: how many LTCs detected (should be 2 for 20s pack)
  */
 struct BMSStatus {
-  // TODO: Change bms_status_flag to int after display feature is completed
-  float bms_status_flag;
-  int bms_c_id;
-  int bms_c_fault;
-  int ltc_fault;
-  int ltc_count;
+  uint8_t bms_status_flag;
+  uint8_t bms_c_id;
+  uint8_t bms_c_fault;
+  uint8_t ltc_fault;
+  uint8_t ltc_count;
 };
 
 /**
@@ -175,54 +171,10 @@ struct BatteryVoltages {
   float aux_battery_voltage;
 };
 
-// ============================================================================
-// DISPLAY DATA STRUCTURES
-// ============================================================================
-
-/**
- * Printed data structure for display
- *
- * Stores all info for a specific type of data being displayed including
- * position, type, value pointer, old value, and label.
- */
-struct PrintedDataStruct {
-  int labelX, y, dataX;       // y is same for data and label, X differs
-  volatile float oldData;     // volatile for some printed data
-  PRINT_TYPE type;
-  volatile float* currData;   // volatile for some printed data
-  int dataLen;
-  const char* labelPtr;       // Label text
-};
-
-/**
- * Printed data structure for thermistor array display
- *
- * Similar to PrintedDataStruct but adjusted for thermistor array
- * using a float array as oldData instead of single float.
- */
-struct PrintedDataThermStruct {
-  int labelX, y, dataX;         // y is same for data and label, X differs
-  volatile float oldData[16];   // volatile for some printed data
-  volatile float* currData;     // volatile for some printed data
-  const char* labelPtr;         // Label text
-};
-
-/**
- * Printed data structure for time display
- *
- * Work in progress - to be better integrated with time update system.
- */
-struct PrintedDataTimeStruct {
-  int labelX, y, dataX;         // y is same for data and label, X differs
-  volatile float oldData[10];   // volatile for some printed data
-  volatile float* currData;     // volatile for some printed data
-  const char* labelPtr;         // Label text
-};
-
 /**
  * Gyroscope Data Structure
  */
-typedef struct {
+struct GyroData {
   float roll_angle;
   float pitch_angle;
   float yaw_angle;
@@ -234,4 +186,4 @@ typedef struct {
   float roll_accel;
   float pitch_accel;
   float yaw_accel;
-} GyroData;
+};

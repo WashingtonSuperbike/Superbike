@@ -18,6 +18,7 @@
 #include <atomic>
 #include "Config.h"
 #include "Constants.h"
+#include "Types.h"
 #include "freertos/FreeRTOS.h"
 
 // ============================================================================
@@ -62,54 +63,9 @@ struct DashboardError {
 
 #define MAX_ACTIVE_ERRORS 8
 
-struct DashboardErrorList {
+struct ErrorList {
     DashboardError errors[MAX_ACTIVE_ERRORS];
     uint32_t       last_update_ms; // for carousel rotation
-};
-
-// ============================================================================
-// DASHBOARD DATA MODEL
-// ============================================================================
-// These structs mirror the mainboard's superbike::Context sub-structs so
-// that data received over CAN can be memcpy'd in without conversion.
-
-struct DashboardMotorStats {
-    float RPM;
-    float motor_current;
-    float motor_controller_battery_voltage;
-    int   error_message;
-};
-
-struct DashboardMotorTemps {
-    float throttle;
-    float motor_controller_temperature;
-    float motor_temperature;
-    uint8_t controller_status;
-    uint8_t switch_status;
-};
-
-struct DashboardBMSStatus {
-    float bms_status_flag;
-    int   bms_c_id;
-    int   bms_c_fault;
-    int   ltc_fault;
-    int   ltc_count;
-};
-
-struct DashboardBatteryVoltages {
-    float hv_series_voltage;
-    float aux_battery_voltage;
-    float hv_cell_voltages[CONFIG_HV_CELL_COUNT];
-};
-
-struct DashboardGyroData {
-    float roll_angle;
-    float pitch_angle;
-    float yaw_angle;
-};
-
-struct DashboardThermistorTemps {
-    float temps[CONFIG_THERMISTOR_COUNT];
 };
 
 // CAN bus health state — updated atomically by CAN_Receive task, read by dashboard task.
@@ -128,15 +84,15 @@ enum class CanStatus : uint8_t {
  * Populate from CAN, serial, or simulation — the UI doesn't care.
  */
 struct DashboardState {
-    DashboardMotorStats       motor;
-    DashboardMotorTemps       temps;
-    DashboardBMSStatus        bms;
-    DashboardBatteryVoltages  battery;
-    DashboardGyroData         gyro;
-    DashboardThermistorTemps  thermistors;
+    MotorStats       motor;
+    MotorTemps       temps;
+    BMSStatus        bms;
+    BatteryVoltages  battery;
+    GyroData         gyro;
+    ThermistorTemps  thermistors;
 
     // Error Management
-    DashboardErrorList     error_list;
+    ErrorList     error_list;
     std::atomic<ErrorSeverity> bms_severity{ErrorSeverity::NONE};
     std::atomic<ErrorSeverity> mc_severity{ErrorSeverity::NONE};
     std::atomic<ErrorSeverity> mb_severity{ErrorSeverity::NONE};

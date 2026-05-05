@@ -79,7 +79,7 @@ portMUX_TYPE g_error_list_mux = portMUX_INITIALIZER_UNLOCKED;
 // ERROR MAPPING HELPERS
 // ============================================================================
 
-static void add_error_to_list(DashboardErrorList &list, ErrorSource source, ErrorSeverity severity, const char *desc)
+static void add_error_to_list(ErrorList &list, ErrorSource source, ErrorSeverity severity, const char *desc)
 {
     if (list.errors[MAX_ACTIVE_ERRORS - 1].is_active) return; // list full
 

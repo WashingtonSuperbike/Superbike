@@ -10,13 +10,17 @@
 #pragma once
 
 #include <stdint.h>
+// ============================================================================
+// MISC CONSTANTS
+// ============================================================================
+#define NUMBER_OF_LTCS 2   // Number of LTC (Linear Technology battery monitors) connected to the BMS
 
 // ============================================================================
 // CAN MESSAGE IDs
 // ============================================================================
 
-#define MOTOR_STATS_MSG           0x0CF11E05    // Motor controller message - CAN
-#define MOTOR_TEMPS_MSG           0x0CF11F05    // Motor controller message - CAN
+#define MOTOR_STATS_MSG           0x0CF11E05    // Motor controller message with stats
+#define MOTOR_TEMPS_MSG           0x0CF11F05    // Motor controller message with temperatures
 #define EVCC_STATS                0x18e54024    // Charge controller status (current,volt...)
 #define CHARGER_STATS             0x18eb2440    // Thunderstruck Charger status (current,volt...)
 #define DD_BMS_STATUS_IND         0x01dd0001    // BMS cell data message (overvolt,undervolt...)

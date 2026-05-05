@@ -6,8 +6,6 @@
 // Forward-declare the board namespace
 using namespace esp_panel::board;
 
-struct DashboardState;  // forward declare
-
 /**
  * Initialize SPI bus for SD card. Must be called AFTER board->begin().
  * Configures CH422G expander pin 4 (SD_CS) as output, disables hardware CS,

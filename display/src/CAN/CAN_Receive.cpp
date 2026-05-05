@@ -1,7 +1,7 @@
 #include "CAN_Receive.h"
 
 // ---------------------------------------------------------------------------
-// Spinlock protecting DashboardBatteryVoltages.hv_cell_voltages writes/reads.
+// Spinlock protecting BatteryVoltages.hv_cell_voltages writes/reads.
 // Extern declaration in DashboardUI.h; used by Logging/logging.cpp for reads.
 portMUX_TYPE g_cell_voltages_mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -15,7 +15,7 @@ static twai_filter_config_t  s_f_config;
 // Decode helpers — mirror mainboard/src/CAN/CAN.cpp with Dashboard types
 // ---------------------------------------------------------------------------
 
-static void decodeMotorStats(twai_message_t msg, DashboardMotorStats *motor)
+static void decodeMotorStats(twai_message_t msg, MotorStats *motor)
 {
     if (msg.data_length_code < 8) {
         Serial.printf("Invalid MOTOR_STATS message length: %d\n", msg.data_length_code);
@@ -27,7 +27,7 @@ static void decodeMotorStats(twai_message_t msg, DashboardMotorStats *motor)
     motor->error_message                    = ((msg.data[7] << 8) | msg.data[6]);
 }
 
-static void decodeMotorTemps(twai_message_t msg, DashboardMotorTemps *temps)
+static void decodeMotorTemps(twai_message_t msg, MotorTemps *temps)
 {
     if (msg.data_length_code < 6) {
         Serial.printf("Invalid MOTOR_TEMPS message length: %d\n", msg.data_length_code);
@@ -40,20 +40,20 @@ static void decodeMotorTemps(twai_message_t msg, DashboardMotorTemps *temps)
     temps->switch_status                = msg.data[5];
 }
 
-static void decipherBMSStatus(twai_message_t msg, DashboardBMSStatus *bms)
+static void decipherBMSStatus(twai_message_t msg, BMSStatus *bms)
 {
     if (msg.data_length_code < 5) {
         Serial.printf("Invalid BMS_STATUS message length: %d\n", msg.data_length_code);
         return;
     }
-    bms->bms_status_flag = (float)(msg.data[0]);
-    bms->bms_c_id    = msg.data[1];
-    bms->bms_c_fault = msg.data[2];
-    bms->ltc_fault   = msg.data[3];
-    bms->ltc_count   = msg.data[4];
+    bms->bms_status_flag = msg.data[0];
+    bms->bms_c_id        = msg.data[1];
+    bms->bms_c_fault     = msg.data[2];
+    bms->ltc_fault       = msg.data[3];
+    bms->ltc_count       = msg.data[4];
 }
 
-static void decipherCellsVoltage(twai_message_t msg, DashboardBatteryVoltages *battery)
+static void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *battery)
 {
     if (msg.data_length_code < 8) {
         Serial.printf("Invalid CELL_VOLTAGES message length: %d\n", msg.data_length_code);
@@ -81,7 +81,7 @@ static void decipherCellsVoltage(twai_message_t msg, DashboardBatteryVoltages *b
     battery->hv_series_voltage = sum;
 }
 
-static void decipherThermistors(twai_message_t msg, DashboardThermistorTemps *thermistors)
+static void decipherThermistors(twai_message_t msg, ThermistorTemps *thermistors)
 {
     if (msg.data_length_code < 8) {
         Serial.printf("Invalid DD_BMSC_TH_STATUS_IND message length: %d\n", msg.data_length_code);
