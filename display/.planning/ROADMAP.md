@@ -19,7 +19,7 @@
 
 - [x] Phase 09: Filtering Utility (3/3 plans) — completed 2026-04-20
 - [x] Phase 10: UI Integration (3/3 plans) — completed 2026-04-20
-- [x] Phase 11: Validation & Performance (3/3 plans) — completed 2026-04-20
+- [x] Phase 11: Validation & Performance (3/3 plans) — completed 2026-05-05
 
 Full details: `.planning/milestones/v1.6-ROADMAP.md`
 
@@ -57,7 +57,9 @@ Plans:
   1. A single shared header (e.g. `DashboardShared.h`) defines color palette macros, the `create_temp_arc` helper declaration, and the `g_error_list_mux` extern
   2. The project compiles without duplicate-symbol or include-cycle errors after the extraction
   3. No widget construction or screen-specific logic is present in the shared header
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 13-01-PLAN.md — Create DashboardShared.h and wire DashboardUI.h/DashboardUI.cpp to use it
 
 ### Phase 14: Per-Screen File Extraction
 **Goal**: `DriveScreen.h/.cpp` and `ChargingScreen.h/.cpp` exist as self-contained translation units; `DashboardWidgets` is split; `DashboardUI.cpp` contains only coordinator logic
@@ -97,6 +99,6 @@ Plans:
 | 10. UI Integration | v1.6 | 3/3 | Complete | 2026-04-20 |
 | 11. Validation & Performance | v1.6 | 3/3 | Complete | 2026-05-05 |
 | 12. Screen Transition Validation | v1.7 | 2/2 | Complete | 2026-05-05 |
-| 13. Shared Infrastructure Extraction | v1.7 | 0/? | Not started | - |
+| 13. Shared Infrastructure Extraction | v1.7 | 0/1 | Not started | - |
 | 14. Per-Screen File Extraction | v1.7 | 0/? | Not started | - |
 | 15. Post-Refactor Verification | v1.7 | 0/? | Not started | - |
