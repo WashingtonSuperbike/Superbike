@@ -7,10 +7,16 @@
 
 #pragma once
 
-#define REFRESH_RATE_HZ 30.0f
-
 #define CONFIG_THERMISTOR_COUNT 10
 
 #define CONFIG_HV_CELL_COUNT 24
 
 #define CONFIG_LOG_COUNT 7
+
+#define CAN_TIMEOUT_MS 2000
+
+#define REFRESH_RATE_HZ 30.0f
+
+// DEBUG FLAGS: Uncomment one of these to force the dashboard to only show a specific screen.
+// #define DEBUG_CHARGING_SCREEN_ONLY
+// #define DEBUG_SPEEDOMETER_SCREEN_ONLY

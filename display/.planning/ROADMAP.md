@@ -27,7 +27,7 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 
 ### v1.7 Screen Separation (Phases 12-15)
 
-- [ ] **Phase 12: Screen Transition Validation** — Verify charging/drive switching and debug override defines on hardware
+- [x] **Phase 12: Screen Transition Validation** — Verify charging/drive switching and debug override defines on hardware (completed 2026-05-05, VAL-02/03 deferred to Phase 15)
 - [ ] **Phase 13: Shared Infrastructure Extraction** — Extract shared header (color macros, arc helper, error mux) that both screen files can include
 - [ ] **Phase 14: Per-Screen File Extraction** — Create DriveScreen and ChargingScreen files; split DashboardWidgets; reduce DashboardUI to coordinator
 - [ ] **Phase 15: Post-Refactor Verification** — Compile clean and smoke test on hardware; confirm behavior unchanged
@@ -46,8 +46,8 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
   5. Defining `DEBUG_CHARGING_SCREEN_ONLY` shows the charging screen regardless of whether live EVCC/charger data is present; defining `DEBUG_SPEEDOMETER_SCREEN_ONLY` shows the drive screen regardless of live charger data; charging screen displays correct voltage, current, power, charger temp, and status label values
 **Plans**: 2 plans
 Plans:
-- [ ] 12-01-PLAN.md — Live CAN hardware validation (EVCC path, charger path, watchdog restore, animation, label values)
-- [ ] 12-02-PLAN.md — Debug define validation (DEBUG_CHARGING_SCREEN_ONLY and DEBUG_SPEEDOMETER_SCREEN_ONLY)
+- [x] 12-01-PLAN.md — Live CAN hardware validation (EVCC path, charger path, watchdog restore, animation, label values)
+- [x] 12-02-PLAN.md — Debug define validation (DEBUG_CHARGING_SCREEN_ONLY and DEBUG_SPEEDOMETER_SCREEN_ONLY)
 
 ### Phase 13: Shared Infrastructure Extraction
 **Goal**: Color macros, `create_temp_arc`, and `g_error_list_mux` live in a shared header that either screen file can include without circular dependencies
@@ -96,7 +96,7 @@ Plans:
 | 9. Filtering Utility | v1.6 | 3/3 | Complete | 2026-04-20 |
 | 10. UI Integration | v1.6 | 3/3 | Complete | 2026-04-20 |
 | 11. Validation & Performance | v1.6 | 3/3 | Complete | 2026-05-05 |
-| 12. Screen Transition Validation | v1.7 | 0/2 | Not started | - |
+| 12. Screen Transition Validation | v1.7 | 2/2 | Complete | 2026-05-05 |
 | 13. Shared Infrastructure Extraction | v1.7 | 0/? | Not started | - |
 | 14. Per-Screen File Extraction | v1.7 | 0/? | Not started | - |
 | 15. Post-Refactor Verification | v1.7 | 0/? | Not started | - |

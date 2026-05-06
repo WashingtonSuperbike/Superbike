@@ -48,13 +48,13 @@ Validate the charging and drive screen implementations (including debug override
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| VAL-01 | Phase 12 | Pending |
-| VAL-02 | Phase 12 | Pending |
-| VAL-03 | Phase 12 | Pending |
-| VAL-04 | Phase 12 | Pending |
-| VAL-05 | Phase 12 | Pending |
-| VAL-06 | Phase 12 | Pending |
-| VAL-07 | Phase 12 | Pending |
+| VAL-01 | Phase 12 | Passed-with-notes (tested via debug constant; live EVCC path code-verified) |
+| VAL-02 | Phase 12→15 | Deferred — active charger not available; code verified by inspection |
+| VAL-03 | Phase 12→15 | Deferred — live CAN required; code verified by inspection |
+| VAL-04 | Phase 12 | Passed-with-notes (fade confirmed; appears choppy at 30 Hz) |
+| VAL-05 | Phase 12 | Passed-with-gap (1s drive screen on boot before task fires) |
+| VAL-06 | Phase 12 | Passed (drive screen locked; live charger path not tested) |
+| VAL-07 | Phase 12→15 | Partial — zero-data layout explained; live data confirmation deferred to Phase 15 |
 | VAL-08 | Phase 15 | Pending |
 | REF-01 | Phase 14 | Pending |
 | REF-02 | Phase 14 | Pending |
