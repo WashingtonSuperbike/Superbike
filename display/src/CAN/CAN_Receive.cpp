@@ -27,7 +27,11 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
         &state->charger,
         &state->thermistors,
         &state->battery,
-        &g_cell_voltages_mux
+        &g_cell_voltages_mux,
+        const_cast<uint32_t*>(&state->motor_last_rx_ms),
+        const_cast<uint32_t*>(&state->bms_last_rx_ms),
+        const_cast<uint32_t*>(&state->charger_last_rx_ms),
+        const_cast<uint32_t*>(&state->evcc_last_rx_ms)
     );
 
     if (!recognized) {

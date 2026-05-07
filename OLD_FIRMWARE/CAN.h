@@ -115,8 +115,8 @@ typedef struct {
  * temps: temperature of thermistor reported by BMS
  */
 typedef struct {
-  bool temps_valid[CONFIG_THERMISTOR_COUNT];
-  float temps[CONFIG_THERMISTOR_COUNT];
+  bool temps_valid[THERMISTOR_COUNT];
+  float temps[THERMISTOR_COUNT];
 } ThermistorTemps;
 
 /**
@@ -127,7 +127,7 @@ typedef struct {
  */
 typedef struct {
   bool hv_cell_voltages_ready;
-  float hv_cell_voltages[CONFIG_HV_CELL_COUNT];
+  float hv_cell_voltages[CELL_COUNT];
   float hv_series_voltage;
   float aux_battery_voltage;
 } BatteryVoltages;

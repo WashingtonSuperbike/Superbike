@@ -88,7 +88,7 @@ static void simulationTask(void *param)
 
         // Hold spinlock while writing cell voltages
         taskENTER_CRITICAL(&g_cell_voltages_mux);
-        for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
+        for (int i = 0; i < CELL_COUNT; i++) {
             dashState.battery.hv_cell_voltages[i] = 3.7f + 0.4f * fabsf(sinf(t + i * 0.25f));
         }
         taskEXIT_CRITICAL(&g_cell_voltages_mux);

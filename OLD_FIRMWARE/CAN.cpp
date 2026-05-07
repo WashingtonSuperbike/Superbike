@@ -68,7 +68,7 @@ void decipherBMSStatus(CAN_message_t msg, BMSStatus *bms_status) {
 static void calculateSeriesVoltage(BatteryVoltages *battery_voltages) {
   float partialSeriesVoltage = 0;
   int current_cell;
-  for (current_cell = 0; current_cell < CONFIG_HV_CELL_COUNT; current_cell++) {
+  for (current_cell = 0; current_cell < CELL_COUNT; current_cell++) {
     partialSeriesVoltage += battery_voltages->hv_cell_voltages[current_cell];
   }
   battery_voltages->hv_series_voltage = partialSeriesVoltage;
@@ -83,7 +83,7 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   totalOffset = (cellOffset * 4) + (ltcOffset * 12);
   int cellIndex;
 
-  static bool hv_cell_detected[CONFIG_HV_CELL_COUNT];
+  static bool hv_cell_detected[CELL_COUNT];
 
   for (cellIndex = 0; cellIndex < 4; cellIndex++) {
     uint16_t *buf = (uint16_t *)msg.buf;
@@ -94,7 +94,7 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   calculateSeriesVoltage(battery_voltages);
 
   if (!battery_voltages->hv_cell_voltages_ready) {
-    for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++ ) {
+    for (int i = 0; i < CELL_COUNT; i++ ) {
       if (!hv_cell_detected[i]) {
         return;
       }

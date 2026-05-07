@@ -128,7 +128,11 @@ static void checkCAN(superbike::CANTaskData canData)
         &context->charger_stats,
         &context->thermistor_temps,
         &context->battery_voltages,
-        &g_cell_voltages_mux
+        &g_cell_voltages_mux,
+        &context->motor_last_rx_ms,
+        &context->bms_last_rx_ms,
+        &context->charger_last_rx_ms,
+        &context->evcc_last_rx_ms
     );
 
     if (!recognized) {

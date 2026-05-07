@@ -63,7 +63,7 @@ static inline void decipherThermistors(twai_message_t msg, ThermistorTemps *ther
     uint8_t *currentThermistor = &msg.data[3];
     for (int i = 0; i < 5; i++) {
         int idx = i + 5 * ltcID;
-        if (idx < CONFIG_THERMISTOR_COUNT) {
+        if (idx < THERMISTOR_COUNT) {
             thermistor_temps->temps[idx] = currentThermistor[i];
             thermistor_temps->temps_valid[idx] = true;
         }
@@ -88,19 +88,19 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
         parsed[i] = ((float)buf[i]) / 10000.0f;
     }
 
-    static bool hv_cell_detected[CONFIG_HV_CELL_COUNT] = {false};
+    static bool hv_cell_detected[CELL_COUNT] = {false};
 
     if (mux) taskENTER_CRITICAL(mux);
     for (int i = 0; i < 4; i++) {
         int idx = i + totalOffset;
-        if (idx >= 0 && idx < CONFIG_HV_CELL_COUNT) {
+        if (idx >= 0 && idx < CELL_COUNT) {
             battery->hv_cell_voltages[idx] = parsed[i];
             hv_cell_detected[idx] = true;
         }
     }
 
     float sum = 0.0f;
-    for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
+    for (int i = 0; i < CELL_COUNT; i++) {
         sum += battery->hv_cell_voltages[i];
     }
     battery->hv_series_voltage = sum;
@@ -108,7 +108,7 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
 
     if (!battery->hv_cell_voltages_ready) {
         bool all_detected = true;
-        for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++) {
+        for (int i = 0; i < CELL_COUNT; i++) {
             if (!hv_cell_detected[i]) {
                 all_detected = false;
                 break;
@@ -124,43 +124,60 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
  * Maps an incoming TWAI message to the appropriate decoder.
  * Returns true if the message was recognized and decoded.
  */
-static inline bool dispatch(
-    twai_message_t msg,
-    MotorStats *motor = nullptr,
-    MotorTemps *temps = nullptr,
-    BMSStatus *bms = nullptr,
-    ChargeControllerStats *evcc = nullptr,
-    ChargerStats *charger = nullptr,
-    ThermistorTemps *thermistors = nullptr,
-    BatteryVoltages *battery = nullptr,
-    portMUX_TYPE *cell_mux = nullptr
-) {
-    uint32_t pgn = msg.identifier >> 8;
-    switch (pgn) {
-        case (MOTOR_STATS_MSG >> 8):
-            if (motor) decodeMotorStats(msg, motor);
-            return true;
-        case (MOTOR_TEMPS_MSG >> 8):
-            if (temps) decodeMotorTemps(msg, temps);
-            return true;
-        case (DD_BMS_STATUS_IND >> 8):
-            if (bms) decipherBMSStatus(msg, bms);
-            return true;
-        case (EVCC_STATS >> 8):
-            if (evcc) decipherEVCCStats(msg, evcc);
-            return true;
-        case (CHARGER_STATS >> 8):
-            if (charger) decipherChargerStats(msg, charger);
-            return true;
-        case (DD_BMSC_TH_STATUS_IND >> 8):
-            if (thermistors) decipherThermistors(msg, thermistors);
-            return true;
-        case (BMSC1_LTC1_CELLS_04 >> 8):
-            if (battery) decipherCellsVoltage(msg, battery, cell_mux);
-            return true;
-        default:
-            return false;
-    }
-}
+ static inline bool dispatch(
+     twai_message_t msg,
+     MotorStats *motor = nullptr,
+     MotorTemps *temps = nullptr,
+     BMSStatus *bms = nullptr,
+     ChargeControllerStats *evcc = nullptr,
+     ChargerStats *charger = nullptr,
+     ThermistorTemps *thermistors = nullptr,
+     BatteryVoltages *battery = nullptr,
+     portMUX_TYPE *cell_mux = nullptr,
+     uint32_t *motor_last_rx = nullptr,
+     uint32_t *bms_last_rx = nullptr,
+     uint32_t *charger_last_rx = nullptr,
+     uint32_t *evcc_last_rx = nullptr
+ ) {
+     uint32_t pgn = msg.identifier >> 8;
+     uint32_t now = 0;
+ #ifdef ARDUINO
+     now = millis();
+ #endif
 
+     switch (pgn) {
+         case (MOTOR_STATS_MSG >> 8):
+             if (motor) decodeMotorStats(msg, motor);
+             if (motor_last_rx) *motor_last_rx = now;
+             return true;
+         case (MOTOR_TEMPS_MSG >> 8):
+             if (temps) decodeMotorTemps(msg, temps);
+             if (motor_last_rx) *motor_last_rx = now;
+             return true;
+         case (DD_BMS_STATUS_IND >> 8):
+             if (bms) decipherBMSStatus(msg, bms);
+             if (bms_last_rx) *bms_last_rx = now;
+             return true;
+         case (EVCC_STATS >> 8):
+             if (evcc) decipherEVCCStats(msg, evcc);
+             if (evcc_last_rx) *evcc_last_rx = now;
+             return true;
+         case (CHARGER_STATS >> 8):
+             if (charger) decipherChargerStats(msg, charger);
+             if (charger_last_rx) *charger_last_rx = now;
+             return true;
+         case (DD_BMSC_TH_STATUS_IND >> 8):
+             if (thermistors) decipherThermistors(msg, thermistors);
+             if (bms_last_rx) *bms_last_rx = now;
+             return true;
+         case (BMSC1_LTC1_CELLS_04 >> 8):
+         case (BMSC1_LTC1_CELLS_58 >> 8):
+         case (BMSC1_LTC1_CELLS_912 >> 8):
+             if (battery) decipherCellsVoltage(msg, battery, cell_mux);
+             if (bms_last_rx) *bms_last_rx = now;
+             return true;
+         default:
+             return false;
+     }
+ }
 } // namespace CANDecoder

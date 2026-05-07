@@ -46,8 +46,16 @@
 #define BATT_TEMP_CRIT_CELSIUS   60.0f
 
 // ============================================================================
-// DRIVETRAIN CONSTANTS
+// BIKE CONFIGURATION CONSTANTS
 // ============================================================================
 #define GEAR_RATIO    (48.0 / 16.0)     // Gear ratio: 48 teeth in the back wheel sprocket, 16 on motor sprocket
 #define WHEEL_DIAM_M  0.522f            // Wheel diameter in meters
 #define MS_TO_MPH     2.2369362920544f  // Conversion factor for m/s to MPH
+
+#define THERMISTOR_COUNT 10
+#define CELL_COUNT 24
+
+#define CELL_LOWEST_V         3.45f
+#define CELL_HIGHEST_V        4.00f
+#define PACK_VOLTAGE_EMPTY_V  (CELL_LOWEST_V * CELL_COUNT)
+#define PACK_VOLTAGE_FULL_V   (CELL_HIGHEST_V * CELL_COUNT)
