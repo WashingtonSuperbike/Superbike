@@ -14,7 +14,6 @@
 #pragma once
 
 #include "DashboardShared.h"
-#include <lvgl.h>
 #include <stdint.h>
 #include <atomic>
 #include "Config.h"

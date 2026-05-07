@@ -12,6 +12,7 @@
 
 #include <lvgl.h>
 #include "freertos/FreeRTOS.h"
+#include "Constants.h"
 
 // ============================================================================
 // COLOUR PALETTE (matches NewUI.cpp hex values, converted to LVGL 32-bit)
@@ -42,6 +43,18 @@
 // Definitions live in their respective .cpp files (DashboardUI.cpp and CAN_Receive.cpp).
 extern portMUX_TYPE g_error_list_mux;    // Protects DashboardState.error_list updates/reads
 extern portMUX_TYPE g_cell_voltages_mux; // Protects BatteryVoltages.hv_cell_voltages writes/reads
+
+// ============================================================================
+// HELPER: convert pack voltage to battery percentage (0–100, clamped)
+// ============================================================================
+
+static inline float pack_voltage_to_pct(float v)
+{
+    float pct = (v - PACK_VOLTAGE_EMPTY_V) / (PACK_VOLTAGE_FULL_V - PACK_VOLTAGE_EMPTY_V) * 100.0f;
+    if (pct > 100.0f) pct = 100.0f;
+    if (pct < 0.0f)   pct = 0.0f;
+    return pct;
+}
 
 // ============================================================================
 // HELPER: pick arc indicator colour based on temperature vs thresholds

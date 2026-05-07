@@ -124,7 +124,7 @@ void update_error_state(DashboardState *state)
     }
     
     // Check thermistor array for overheating
-    for (int i = 0; i < CONFIG_THERMISTOR_COUNT; i++) {
+    for (int i = 0; i < THERMISTOR_COUNT; i++) {
         if (state->thermistors.temps[i] >= BATT_TEMP_WARN_CELSIUS) {
             char t_buf[32];
             snprintf(t_buf, sizeof(t_buf), "BMS: THERMISTOR %d HOT", i);
@@ -332,7 +332,7 @@ static void build_drive_ui(lv_obj_t *scr)
     const lv_coord_t arc_y = 25;
     const lv_coord_t arc_spacing = 135;
     create_temp_arc(scr, &w.batt_temp_arc, &w.batt_temp_label,
-                    "BATT", CLR_MOTOR_TEMP,
+                    "BATT", CLR_BATT_TEMP,
                     BATT_TEMP_MIN, BATT_TEMP_MAX,
                     arc_x, arc_y);
 
@@ -342,7 +342,7 @@ static void build_drive_ui(lv_obj_t *scr)
                     arc_x + arc_spacing, arc_y);
 
     create_temp_arc(scr, &w.mc_temp_arc, &w.mc_temp_label,
-                    "MTR CTRL", CLR_MOTOR_TEMP,
+                    "MTR CTRL", CLR_MC_TEMP,
                     MC_TEMP_MIN, MC_TEMP_MAX,
                     arc_x, arc_y + arc_spacing);
 
@@ -569,7 +569,7 @@ static void refresh_drive_ui(const DashboardState &state)
     float s_mc_t    = state.temps.motor_controller_temperature;
 
     float s_batt_t = 0;
-    for (int i = 0; i < CONFIG_THERMISTOR_COUNT; i++) {
+    for (int i = 0; i < THERMISTOR_COUNT; i++) {
         if (state.thermistors.temps[i] > s_batt_t)
             s_batt_t = state.thermistors.temps[i];
     }
@@ -667,10 +667,7 @@ static void refresh_drive_ui(const DashboardState &state)
     }        
 
     // Battery %
-    float pct = (s_voltage - 60.0f) / (100.8f - 60.0f) * 100.0f;
-    if (pct > 100.0f) pct = 100.0f;
-    if (pct < 0.0f)   pct = 0.0f;
-    int pct_int = (int)pct;
+    int pct_int = (int)pack_voltage_to_pct(s_voltage);
 
     if (pct_int != prev_batt_pct) {
         snprintf(buf, sizeof(buf), "%d %%", pct_int);
@@ -680,16 +677,16 @@ static void refresh_drive_ui(const DashboardState &state)
         const char *symbol = LV_SYMBOL_BATTERY_FULL;
         lv_color_t color = CLR_WHITE;
 
-        if (pct < 10.0f) {
+        if (pct_int < 10) {
             symbol = LV_SYMBOL_BATTERY_EMPTY;
             color = CLR_WARN_RED;
-        } else if (pct < 25.0f) {
+        } else if (pct_int < 25) {
             symbol = LV_SYMBOL_BATTERY_1;
             color = CLR_WARN_RED;
-        } else if (pct < 50.0f) {
+        } else if (pct_int < 50) {
             symbol = LV_SYMBOL_BATTERY_2;
             color = CLR_WARN_YELLOW;
-        } else if (pct < 75.0f) {
+        } else if (pct_int < 75) {
             symbol = LV_SYMBOL_BATTERY_3;
             color = CLR_WHITE;
         }
@@ -811,13 +808,11 @@ static void refresh_charging_ui(const DashboardState &state)
     
     // Battery %
     float voltage = state.battery.hv_series_voltage;
-    float pct = (voltage - 60.0f) / (100.8f - 60.0f) * 100.0f;
-    if (pct > 100.0f) pct = 100.0f;
-    if (pct < 0.0f)   pct = 0.0f;
+    int pct_chg = (int)pack_voltage_to_pct(voltage);
 
-    snprintf(buf, sizeof(buf), "%d%%", (int)pct);
+    snprintf(buf, sizeof(buf), "%d%%", pct_chg);
     lv_label_set_text(w.chg_batt_pct_label, buf);
-    lv_bar_set_value(w.chg_bar, (int)pct, LV_ANIM_ON);
+    lv_bar_set_value(w.chg_bar, pct_chg, LV_ANIM_ON);
 
     // Voltage
     snprintf(buf, sizeof(buf), "%.1f V", voltage);
