@@ -23,28 +23,6 @@
 #include <cmath>
 
 // ============================================================================
-// COLOUR PALETTE (matches NewUI.cpp hex values, converted to LVGL 32-bit)
-// ============================================================================
-
-#define CLR_BG           lv_color_black()
-#define CLR_WHITE        lv_color_white()
-#define CLR_SPEED        lv_color_white()
-#define CLR_STATUS_GREEN lv_color_make(0x24, 0xBE, 0x24)  // green-ish
-#define CLR_POWER_POS    lv_color_make(0x24, 0xBE, 0x48)  // ~0x24BE
-#define CLR_POWER_NEG    lv_color_make(0x4D, 0x6A, 0x4D)  // ~0x4D6A (regen)
-#define CLR_BATT_TEMP    lv_color_make(0xF8, 0x71, 0x10)  // ~0xF8E2 warm
-#define CLR_MOTOR_TEMP   lv_color_make(0x3E, 0xCA, 0x50)  // ~0x3F2A cool
-#define CLR_MC_TEMP      lv_color_make(0xFE, 0x80, 0x00)  // ~0xFE40 orange
-#define CLR_GYRO         lv_color_make(0xBD, 0xBD, 0xBD)  // ~0xBDF7 grey
-#define CLR_WARN_RED     lv_color_make(0xF8, 0x20, 0x00)
-#define CLR_WARN_YELLOW  lv_color_make(0xFE, 0xE0, 0x00)
-#define CLR_DISABLED     lv_color_make(0x80, 0x80, 0x80)  // gray for boot/inactive
-#define CLR_LOGO         lv_color_make(0x4B, 0x2C, 0x92)  // purple
-#define CLR_MOTORING     lv_color_make(0x00, 0x80, 0xFF)  // blue  (positive current)
-#define CLR_REGEN        lv_color_make(0x00, 0xC8, 0x00)  // green (negative current)
-#define CLR_NEEDLE       lv_color_make(0xFF, 0x20, 0x00)  // red needle
-
-// ============================================================================
 // STATIC WIDGET STATE
 // ============================================================================
 
@@ -282,87 +260,26 @@ static lv_obj_t *create_icon_label(lv_obj_t *parent, const char *symbol,
 }
 
 // ============================================================================
-// HELPER: pick arc indicator color based on temperature vs thresholds
+// UI BUILDERS
 // ============================================================================
 
-static inline lv_color_t temp_arc_color(float temp, float warn, float crit)
+static void build_drive_ui(lv_obj_t *scr)
 {
-    if (temp >= crit) return CLR_WARN_RED;
-    if (temp >= warn) return CLR_WARN_YELLOW;
-    return CLR_MOTOR_TEMP;
-}
-
-// ============================================================================
-// HELPER: create a temperature arc (right column)
-// ============================================================================
-
-static void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,
-                            const char *title, lv_color_t color,
-                            int min_val, int max_val,
-                            lv_coord_t x, lv_coord_t y)
-{
-    *arc = lv_arc_create(parent);
-    lv_obj_set_size(*arc, 110, 110);
-    lv_arc_set_range(*arc, min_val, max_val);
-    lv_arc_set_value(*arc, min_val);
-    lv_arc_set_bg_angles(*arc, 135, 45);
-    lv_obj_set_style_arc_color(*arc, lv_color_make(0x30, 0x30, 0x30), LV_PART_MAIN);
-    lv_obj_set_style_arc_color(*arc, color, LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(*arc, 10, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(*arc, 10, LV_PART_INDICATOR);
-    lv_obj_remove_style(*arc, NULL, LV_PART_KNOB);
-    lv_obj_clear_flag(*arc, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_pos(*arc, x, y);
-
-    // Value label centred inside the arc
-    *label = lv_label_create(*arc);
-    lv_label_set_text(*label, "--");
-    lv_obj_set_style_text_color(*label, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(*label, &lv_font_montserrat_16, 0);
-    lv_obj_center(*label);
-
-    // Title label below the arc
-    lv_obj_t *title_lbl = lv_label_create(parent);
-    lv_label_set_text(title_lbl, title);
-    lv_obj_set_style_text_color(title_lbl, CLR_WHITE, 0);
-    lv_obj_set_style_text_font(title_lbl, &lv_font_montserrat_12, 0);
-    lv_obj_align_to(title_lbl, *arc, LV_ALIGN_BOTTOM_MID, 0, 5);
-}
-
-// ============================================================================
-// dashboard_create()  -- build the full UI (call once under lvgl_port_lock)
-// ============================================================================
-
-void dashboard_create(void)
-{
-    lv_obj_t *scr = lv_scr_act();
-    lv_obj_set_style_bg_color(scr, CLR_BG, 0);
-
     // -- SPEEDOMETER DIAL (static pre-rendered image) --
-    // Tick marks and labels are baked into a 430x430 RGB565 image to avoid
-    // redrawing 141 ticks every frame (the main FPS bottleneck with lv_meter).
     w.dial_img = lv_img_create(scr);
     lv_img_set_src(w.dial_img, &dial_face);
     lv_obj_set_pos(w.dial_img, 35, 15);
     lv_obj_clear_flag(w.dial_img, LV_OBJ_FLAG_CLICKABLE);
 
-    // --- Current arcs (standalone, overlaid on dial image) ---
-    // Original meter current scale: range -100..+100, 210° sweep, rotation=60°
-    // In LVGL lv_arc angles: 0°=3 o'clock (CW). Meter 0°=12 o'clock (CW).
-    // Meter rotation 60° => arc start = 60+90 = 150°. Arc end = 150+210 = 360 = 0°.
-    // The arc widget size is 450x450 to match the r_mod=+10 offset from the 430px dial.
-    // Centered on dial center (250,230) => top-left = (250-225, 230-225) = (25, 5).
-
+    // --- Current arcs ---
     // Motoring arc (blue): shows 0A to +current, clockwise from 0 mph origin
-    // 0A is at the midpoint of the -100..+100 range => 150 + 105 = 255° in arc coords
     w.current_motoring_arc = lv_arc_create(scr);
     lv_obj_set_size(w.current_motoring_arc, 450, 450);
     lv_obj_set_pos(w.current_motoring_arc, 25, 5);
     lv_arc_set_mode(w.current_motoring_arc, LV_ARC_MODE_NORMAL);
     lv_arc_set_range(w.current_motoring_arc, 0, 100);
     lv_arc_set_value(w.current_motoring_arc, 0);
-    lv_arc_set_bg_angles(w.current_motoring_arc, 165, 375);   // 0A (165°) to +100A (375°)
-    lv_arc_set_rotation(w.current_motoring_arc, 0);
+    lv_arc_set_bg_angles(w.current_motoring_arc, 165, 375);
     lv_obj_set_style_arc_color(w.current_motoring_arc, CLR_BG, LV_PART_MAIN);
     lv_obj_set_style_arc_color(w.current_motoring_arc, CLR_MOTORING, LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(w.current_motoring_arc, 10, LV_PART_MAIN);
@@ -379,8 +296,7 @@ void dashboard_create(void)
     lv_arc_set_mode(w.current_regen_arc, LV_ARC_MODE_REVERSE);
     lv_arc_set_range(w.current_regen_arc, 0, 100);
     lv_arc_set_value(w.current_regen_arc, 0);
-    lv_arc_set_bg_angles(w.current_regen_arc, 115, 165);       // -100A (115°) to 0A (165°)
-    lv_arc_set_rotation(w.current_regen_arc, 0);
+    lv_arc_set_bg_angles(w.current_regen_arc, 115, 165);
     lv_obj_set_style_arc_color(w.current_regen_arc, CLR_BG, LV_PART_MAIN);
     lv_obj_set_style_arc_color(w.current_regen_arc, CLR_REGEN, LV_PART_INDICATOR);
     lv_obj_set_style_arc_width(w.current_regen_arc, 10, LV_PART_MAIN);
@@ -390,20 +306,17 @@ void dashboard_create(void)
     lv_obj_set_style_bg_opa(w.current_regen_arc, LV_OPA_TRANSP, 0);
     lv_obj_add_flag(w.current_regen_arc, LV_OBJ_FLAG_HIDDEN);
 
-    // Speed needle: standalone lv_line so only its narrow strip is redrawn each frame.
+    // --- Speed needle ---
     w.needle_line = lv_line_create(scr);
     lv_obj_set_style_line_width(w.needle_line, 5, 0);
     lv_obj_set_style_line_color(w.needle_line, CLR_NEEDLE, 0);
     lv_obj_set_style_line_rounded(w.needle_line, true, 0);
-    // Initialise at 0 mph (angle=165°, pointing lower-left from dial centre)
-    // Dial centre on screen: (35+215, 15+215) = (250, 230); needle length = 195px
-    // LVGL angle convention: 0°=12-o'clock, clockwise. x=sin(θ), y=-cos(θ)
     w.needle_pts[0] = {250, 230};
     w.needle_pts[1] = {(lv_coord_t)(250 + 195.0f * sinf(255.0f * M_PI / 180.0f)),
                        (lv_coord_t)(230 - 195.0f * cosf(255.0f * M_PI / 180.0f))};
     lv_line_set_points(w.needle_line, w.needle_pts, 2);
 
-    // --- Digital speed readout (positioned over dial image) ---
+    // --- Digital speed ---
     w.meter_speed_label = lv_label_create(scr);
     lv_label_set_text(w.meter_speed_label, "0");
     lv_obj_set_style_text_color(w.meter_speed_label, CLR_WHITE, 0);
@@ -569,8 +482,62 @@ void dashboard_create(void)
     lv_obj_align(w.modal_desc, LV_ALIGN_CENTER, 0, 40);
 }
 
+static void build_charging_ui(lv_obj_t *scr)
+{
+    // Big Battery Percentage
+    w.chg_batt_pct_label = lv_label_create(scr);
+    lv_obj_set_style_text_font(w.chg_batt_pct_label, &lv_font_montserrat_144, 0);
+    lv_obj_set_style_text_color(w.chg_batt_pct_label, CLR_WHITE, 0);
+    lv_obj_align(w.chg_batt_pct_label, LV_ALIGN_TOP_MID, 0, 40);
+    lv_label_set_text(w.chg_batt_pct_label, "0%");
+
+    // Charging Bar
+    w.chg_bar = lv_bar_create(scr);
+    lv_obj_set_size(w.chg_bar, 600, 40);
+    lv_obj_align(w.chg_bar, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_set_style_bg_color(w.chg_bar, lv_color_make(0x30, 0x30, 0x30), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(w.chg_bar, CLR_STATUS_GREEN, LV_PART_INDICATOR);
+
+    // Stats Grid
+    lv_obj_t *cont = lv_obj_create(scr);
+    lv_obj_set_size(cont, 700, 150);
+    lv_obj_align(cont, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_set_style_bg_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_opa(cont, LV_OPA_TRANSP, 0);
+    lv_obj_set_layout(cont, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(cont, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    auto create_stat = [&](lv_obj_t **lbl, const char *title) {
+        lv_obj_t *stat_cont = lv_obj_create(cont);
+        lv_obj_set_size(stat_cont, 160, 100);
+        lv_obj_set_style_bg_color(stat_cont, lv_color_make(0x20, 0x20, 0x20), 0);
+        lv_obj_set_style_border_color(stat_cont, lv_color_make(0x40, 0x40, 0x40), 0);
+        
+        lv_obj_t *t = lv_label_create(stat_cont);
+        lv_label_set_text(t, title);
+        lv_obj_set_style_text_font(t, &lv_font_montserrat_14, 0);
+        lv_obj_align(t, LV_ALIGN_TOP_MID, 0, 5);
+
+        *lbl = lv_label_create(stat_cont);
+        lv_label_set_text(*lbl, "--");
+        lv_obj_set_style_text_font(*lbl, &lv_font_montserrat_24, 0);
+        lv_obj_align(*lbl, LV_ALIGN_CENTER, 0, 10);
+    };
+
+    create_stat(&w.chg_voltage_label, "VOLTAGE");
+    create_stat(&w.chg_current_label, "CURRENT");
+    create_stat(&w.chg_power_label, "POWER");
+    create_stat(&w.chg_temp_label, "CHG TEMP");
+
+    w.chg_status_label = lv_label_create(scr);
+    lv_obj_align(w.chg_status_label, LV_ALIGN_TOP_LEFT, 20, 20);
+    lv_obj_set_style_text_color(w.chg_status_label, CLR_STATUS_GREEN, 0);
+    lv_label_set_text(w.chg_status_label, "CHARGING ACTIVE");
+}
+
 // ============================================================================
-// dashboard_refresh()  -- push DashboardState data into widgets
+// UI REFRESHERS
 // ============================================================================
 
 static int rpm_to_mph(float rpm)
@@ -578,11 +545,10 @@ static int rpm_to_mph(float rpm)
     return (int)(rpm / GEAR_RATIO * (float)M_PI * WHEEL_DIAM_M / 60.0f * MS_TO_MPH);
 }
 
-void dashboard_refresh(const DashboardState &state)
+static void refresh_drive_ui(const DashboardState &state)
 {
     char buf[32];
 
-    // -- v1.6 Data Smoothing --
     // Snap to values on first run to avoid 0 -> value ramp transients
     if (prev_speed == -1) {
         f_rpm.reset(state.motor.RPM);
@@ -609,9 +575,8 @@ void dashboard_refresh(const DashboardState &state)
     // -- Speed (needle + digital label) --
     int speed = rpm_to_mph(s_rpm);
     if (speed < 0)   speed = 0;
-    if (speed > 140) speed = 140;   // clamp to dial face max
+    if (speed > 140) speed = 140;
     if (speed != prev_speed) {
-        // Update the standalone needle line — only its narrow strip is redrawn
         float angle_deg = 255.0f + (float)speed * (210.0f / 140.0f);
         float angle_rad = angle_deg * (float)M_PI / 180.0f;
         w.needle_pts[0] = {250, 230};
@@ -662,10 +627,9 @@ void dashboard_refresh(const DashboardState &state)
         prev_gyro_roll = roll;
     }
 
-    // -- Motor current arcs (outer ring) --
+    // -- Motor current arcs --
     float abs_current = fabsf(s_current);
     if (abs_current > 100.0f) abs_current = 100.0f;
-
     int cur_dir = (s_current > 0.0f) ? 1 : (s_current < 0.0f) ? -1 : 0;
     int32_t cur_val = (int32_t)abs_current;
     if (cur_dir != prev_current_dir || cur_val != prev_current_value) {
@@ -685,7 +649,7 @@ void dashboard_refresh(const DashboardState &state)
         prev_current_value = cur_val;
     }
 
-    // -- Battery and MC voltage readouts --
+    // -- Battery and MC voltage --
     int batt_mv = (int)(s_voltage * 10.0f);
     if (batt_mv != prev_batt_mv) {
         snprintf(buf, sizeof(buf), "%.1f V", s_voltage);
@@ -700,7 +664,7 @@ void dashboard_refresh(const DashboardState &state)
         prev_mc_mv = mc_mv;
     }        
 
-    // Battery % estimate: linear map across nominal 24s LiIO range
+    // Battery %
     float pct = (s_voltage - 60.0f) / (100.8f - 60.0f) * 100.0f;
     if (pct > 100.0f) pct = 100.0f;
     if (pct < 0.0f)   pct = 0.0f;
@@ -730,55 +694,43 @@ void dashboard_refresh(const DashboardState &state)
 
         lv_label_set_text(w.batt_icon, symbol);
         lv_obj_set_style_text_color(w.batt_icon, color, 0);
-        
         prev_batt_pct = pct_int;
     }
 
-    // -- SD card icon --
+    // -- SD card --
     if (state.sd_started != prev_sd_started) {
-        if (state.sd_started) {
-            lv_obj_set_style_text_color(w.sd_icon, CLR_WHITE, 0);
-        } else {
-            lv_obj_set_style_text_color(w.sd_icon, CLR_WARN_RED, 0);
-        }
+        lv_obj_set_style_text_color(w.sd_icon, state.sd_started ? CLR_WHITE : CLR_WARN_RED, 0);
         prev_sd_started = state.sd_started;
     }
 
-    // -- CAN status icon (CANU-02, D-11) --
+    // -- CAN status --
     CanStatus can_st = state.can_status.load();
     if (can_st != prev_can_status) {
         lv_color_t can_color;
-        if (can_st == CanStatus::RECEIVING) {
-            can_color = CLR_STATUS_GREEN;       // green — actively receiving frames
-        } else if (can_st == CanStatus::TIMEOUT) {
-            can_color = CLR_WARN_YELLOW;   // yellow — no frame in last 1 s (after contact)
-        } else if (can_st == CanStatus::BOOT) {
-            can_color = CLR_DISABLED;      // gray — waiting for first frame
-        } else {
-            can_color = CLR_WARN_RED;      // red — ERR_PASSIVE or BUS_OFF
-        }
+        if (can_st == CanStatus::RECEIVING) can_color = CLR_STATUS_GREEN;
+        else if (can_st == CanStatus::TIMEOUT) can_color = CLR_WARN_YELLOW;
+        else if (can_st == CanStatus::BOOT) can_color = CLR_DISABLED;
+        else can_color = CLR_WARN_RED;
         lv_obj_set_style_text_color(w.can_icon, can_color, 0);
         prev_can_status = can_st;
     }
 
-    // -- BMS/MC Status Icons (v1.5) --
+    // -- BMS/MC Status Icons --
     auto get_sev_color = [](ErrorSeverity sev) {
         if (sev == ErrorSeverity::CRIT) return CLR_WARN_RED;
         if (sev == ErrorSeverity::WARN) return CLR_WARN_YELLOW;
         if (sev == ErrorSeverity::INFO) return CLR_WHITE;
-        return CLR_STATUS_GREEN; // Green for NONE
+        return CLR_STATUS_GREEN;
     };
     lv_obj_set_style_text_color(w.bms_status_label, get_sev_color(state.bms_severity.load()), 0);
     lv_obj_set_style_text_color(w.mc_status_icon,   get_sev_color(state.mc_severity.load()), 0);
 
-    // -- Warning Carousel (v1.5) --
+    // -- Warning Carousel --
     static int carousel_idx = 0;
     static uint32_t last_carousel_ms = 0;
-    const uint32_t carousel_interval_ms = 1500; // 1.5 seconds
+    const uint32_t carousel_interval_ms = 1500;
 
     taskENTER_CRITICAL(&g_error_list_mux);
-    
-    // Count active warnings/infos (CRIT handled by modal in next phase)
     int warning_count = 0;
     int first_warning_idx = -1;
     for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
@@ -815,7 +767,6 @@ void dashboard_refresh(const DashboardState &state)
         lv_obj_add_flag(w.warning_carousel_icon, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(w.warning_carousel_label, LV_OBJ_FLAG_HIDDEN);
     }
-
     taskEXIT_CRITICAL(&g_error_list_mux);
 
     // -- Critical Error Modal (v1.5) --
@@ -825,10 +776,8 @@ void dashboard_refresh(const DashboardState &state)
     
     if (crit_active) {
         lv_obj_clear_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
-        
         static int crit_carousel_idx = 0;
         static uint32_t last_crit_carousel_ms = 0;
-        
         taskENTER_CRITICAL(&g_error_list_mux);
 
         // Count active critical errors
@@ -854,18 +803,112 @@ void dashboard_refresh(const DashboardState &state)
                 break;
             }
         }
-
-        if (found_crit_idx != -1) {
-            lv_label_set_text(w.modal_desc, state.error_list.errors[found_crit_idx].description);
-        } else {
-            lv_label_set_text(w.modal_desc, "CRITICAL FAULT");
-        }
-
+        if (found_crit_idx != -1) lv_label_set_text(w.modal_desc, state.error_list.errors[found_crit_idx].description);
+        else lv_label_set_text(w.modal_desc, "CRITICAL FAULT");
         taskEXIT_CRITICAL(&g_error_list_mux);
     } else {
         lv_obj_add_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
     }
 }
+
+static void refresh_charging_ui(const DashboardState &state)
+{
+    char buf[32];
+    
+    // Battery %
+    float voltage = state.battery.hv_series_voltage;
+    float pct = (voltage - 60.0f) / (100.8f - 60.0f) * 100.0f;
+    if (pct > 100.0f) pct = 100.0f;
+    if (pct < 0.0f)   pct = 0.0f;
+
+    snprintf(buf, sizeof(buf), "%d%%", (int)pct);
+    lv_label_set_text(w.chg_batt_pct_label, buf);
+    lv_bar_set_value(w.chg_bar, (int)pct, LV_ANIM_ON);
+
+    // Voltage
+    snprintf(buf, sizeof(buf), "%.1f V", voltage);
+    lv_label_set_text(w.chg_voltage_label, buf);
+
+    // Current
+    snprintf(buf, sizeof(buf), "%.1f A", state.charger.output_current);
+    lv_label_set_text(w.chg_current_label, buf);
+
+    // Power (kW)
+    float power_kw = (voltage * state.charger.output_current) / 1000.0f;
+    snprintf(buf, sizeof(buf), "%.2f kW", power_kw);
+    lv_label_set_text(w.chg_power_label, buf);
+
+    // Charger Temp
+    snprintf(buf, sizeof(buf), "%d C", state.charger.charger_temp);
+    lv_label_set_text(w.chg_temp_label, buf);
+
+    // Status
+    if (state.charger.output_current < 0.1f) {
+        lv_label_set_text(w.chg_status_label, "CHARGER CONNECTED - IDLE");
+        lv_obj_set_style_text_color(w.chg_status_label, CLR_WHITE, 0);
+    } else {
+        lv_label_set_text(w.chg_status_label, "CHARGING ACTIVE");
+        lv_obj_set_style_text_color(w.chg_status_label, CLR_STATUS_GREEN, 0);
+    }
+}
+
+// ============================================================================
+// dashboard_create()  -- build the full UI (call once under lvgl_port_lock)
+// ============================================================================
+
+void dashboard_create(void)
+{
+    // Create screens
+    w.main_drive_screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(w.main_drive_screen, CLR_BG, 0);
+
+    w.charging_screen = lv_obj_create(NULL);
+    lv_obj_set_style_bg_color(w.charging_screen, CLR_BG, 0);
+
+    // Build UIs on respective screens
+    build_drive_ui(w.main_drive_screen);
+    build_charging_ui(w.charging_screen);
+
+    // Initial load
+    lv_scr_load(w.main_drive_screen);
+}
+
+// ============================================================================
+// dashboard_refresh()  -- push DashboardState data into widgets
+// ============================================================================
+
+void dashboard_refresh(const DashboardState &state)
+{
+    // Determine charging state with watchdog
+    uint32_t now = millis();
+    bool evcc_alive = (now - state.evcc_last_rx_ms < CAN_TIMEOUT_MS);
+    bool charger_alive = (now - state.charger_last_rx_ms < CAN_TIMEOUT_MS);
+    
+    // We are "charging" if the EVCC is enabled OR we see current flowing from the charger
+    bool is_charging = (evcc_alive && state.evcc.en > 0) || (charger_alive && state.charger.output_current > 0.5f);
+    
+#ifdef DEBUG_CHARGING_SCREEN_ONLY
+    is_charging = true;
+#endif
+#ifdef DEBUG_SPEEDOMETER_SCREEN_ONLY
+    is_charging = false;
+#endif
+
+    lv_obj_t *active_scr = lv_scr_act();
+
+    if (is_charging && active_scr != w.charging_screen) {
+        lv_scr_load_anim(w.charging_screen, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, false);
+    } else if (!is_charging && active_scr != w.main_drive_screen) {
+        lv_scr_load_anim(w.main_drive_screen, LV_SCR_LOAD_ANIM_FADE_ON, 500, 0, false);
+    }
+
+    if (is_charging) {
+        refresh_charging_ui(state);
+    } else {
+        refresh_drive_ui(state);
+    }
+}
+
 
 // ============================================================================
 // dashboardTask() -- FreeRTOS task that refreshes the UI

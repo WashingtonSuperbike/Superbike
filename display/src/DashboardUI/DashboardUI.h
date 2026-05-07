@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "DashboardShared.h"
 #include <lvgl.h>
 #include <stdint.h>
 #include <atomic>
@@ -93,6 +94,12 @@ struct DashboardState {
     ChargeControllerStats evcc;
     ChargerStats     charger;
 
+    // Watchdog Timestamps (ms)
+    uint32_t motor_last_rx_ms;
+    uint32_t bms_last_rx_ms;
+    uint32_t charger_last_rx_ms;
+    uint32_t evcc_last_rx_ms;
+
     // Error Management
     ErrorList     error_list;
     std::atomic<ErrorSeverity> bms_severity{ErrorSeverity::NONE};
@@ -103,10 +110,6 @@ struct DashboardState {
     std::atomic<CanStatus> can_status{};  // D-01: lock-free CAN health state; default NO_DATA (ordinal 0)
 };
 
-// Spinlocks
-extern portMUX_TYPE g_cell_voltages_mux;
-extern portMUX_TYPE g_error_list_mux; // Protects error_list updates/reads
-
 // ============================================================================
 // WIDGET HANDLE STRUCT
 // ============================================================================
@@ -116,6 +119,11 @@ extern portMUX_TYPE g_error_list_mux; // Protects error_list updates/reads
  * be updated later without recreating them each frame.
  */
 struct DashboardWidgets {
+    // Root Screens
+    lv_obj_t              *main_drive_screen;
+    lv_obj_t              *charging_screen;
+
+    // --- DRIVE SCREEN WIDGETS ---
     // Speedometer dial (static image + dynamic overlays)
     lv_obj_t              *dial_img;
     lv_obj_t              *meter_speed_label;
@@ -152,8 +160,8 @@ struct DashboardWidgets {
     // Status icons (bottom strip)
     lv_obj_t *sd_icon;
     lv_obj_t *can_icon;
-    lv_obj_t *bms_status_label; // existing
-    lv_obj_t *mc_status_icon;   // new for Phase 06
+    lv_obj_t *bms_status_label;
+    lv_obj_t *mc_status_icon;
 
     // Superbike logo (bottom middle)
     lv_obj_t *logo_icon;
@@ -169,6 +177,15 @@ struct DashboardWidgets {
     lv_obj_t *error_modal;
     lv_obj_t *modal_title;
     lv_obj_t *modal_desc;
+
+    // --- CHARGING SCREEN WIDGETS ---
+    lv_obj_t *chg_batt_pct_label;
+    lv_obj_t *chg_voltage_label;
+    lv_obj_t *chg_current_label;
+    lv_obj_t *chg_power_label;
+    lv_obj_t *chg_temp_label;
+    lv_obj_t *chg_status_label;
+    lv_obj_t *chg_bar;
 };
 
 // ============================================================================
