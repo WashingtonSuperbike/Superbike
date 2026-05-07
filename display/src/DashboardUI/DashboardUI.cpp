@@ -173,7 +173,7 @@ void update_error_state(DashboardState *state)
     }
     if (mc_err & 0x400) {
         add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "THROTTLE SHORT OR OPEN CIRCUIT");
-        if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
+        max_mc = ErrorSeverity::CRIT;
     }
     if (mc_err & 0x800) {
         add_error_to_list(state->error_list, ErrorSource::MOTOR_CONTROLLER, ErrorSeverity::CRIT, "ANGLE SENSOR ERROR");
