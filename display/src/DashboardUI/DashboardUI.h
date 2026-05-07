@@ -154,9 +154,6 @@ struct DashboardWidgets {
     lv_obj_t *batt_percent;
     lv_obj_t *batt_icon;
 
-    // Stopwatch
-    lv_obj_t *stopwatch_label;
-
     // Status icons (bottom strip)
     lv_obj_t *sd_icon;
     lv_obj_t *can_icon;
@@ -165,9 +162,6 @@ struct DashboardWidgets {
 
     // Superbike logo (bottom middle)
     lv_obj_t *logo_icon;
-
-    // Error message
-    lv_obj_t *error_label;
 
     // Warning carousel (bottom-right)
     lv_obj_t *warning_carousel_label;
