@@ -29,7 +29,7 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 
 - [x] **Phase 12: Screen Transition Validation** — Verify charging/drive switching and debug override defines on hardware (completed 2026-05-05, VAL-02/03 deferred to Phase 15)
 - [x] **Phase 13: Shared Infrastructure Extraction** — Extract shared header (color macros, arc helper, error mux) that both screen files can include (completed 2026-05-06)
-- [ ] **Phase 14: Per-Screen File Extraction** — Create DriveScreen and ChargingScreen files; split DashboardWidgets; reduce DashboardUI to coordinator
+- [x] **Phase 14: Per-Screen File Extraction** — Create DriveScreen and ChargingScreen files; split DashboardWidgets; reduce DashboardUI to coordinator (completed 2026-05-07)
 - [ ] **Phase 15: Post-Refactor Verification** — Compile clean and smoke test on hardware; confirm behavior unchanged
 
 ## Phase Details
@@ -70,18 +70,28 @@ Plans:
   2. `ChargingScreen.h/.cpp` contains `charging_screen_build`, `charging_screen_refresh`, and all charging widget handle fields — nothing else
   3. Drive widget fields are declared in `DriveScreen.h` and charging widget fields in `ChargingScreen.h`; neither struct field set appears in `DashboardUI.h`
   4. `DashboardUI.cpp` contains only `dashboard_create`, `dashboard_refresh` (screen routing), and `dashboardTask` — no widget construction or signal refresh logic
-**Plans**: TBD
-**UI hint**: yes
+**Plans**: 3 plans
+Plans:
+- [x] 14-01-PLAN.md — Create DriveScreen.h and DriveScreen.cpp (drive widgets, EMA filters, error logic)
+- [x] 14-02-PLAN.md — Create ChargingScreen.h and ChargingScreen.cpp (charging widgets, builder, refresher)
+- [x] 14-03-PLAN.md — Thin DashboardUI.h and DashboardUI.cpp to coordinator-only; verify build passes
 
 ### Phase 15: Post-Refactor Verification
 **Goal**: The refactored codebase compiles without warnings and produces identical on-screen behavior to the pre-refactor baseline
 **Depends on**: Phase 14
-**Requirements**: REF-06, VAL-08
+**Requirements**: REF-06, VAL-02, VAL-03, VAL-07, VAL-08
 **Success Criteria** (what must be TRUE):
-  1. `pio run` completes with zero errors and zero new warnings compared to pre-refactor
+  1. `pio run` completes with zero errors and zero warnings (D-01: zero total warnings, not just zero new)
   2. Drive screen on hardware shows correct speed needle, temperature arcs, current arcs, and error overlays after flashing the refactored build
-  3. Switching between drive and charging screen (live or via debug defines) behaves identically to the Phase 12 validated baseline
-**Plans**: TBD
+  3. Switching between drive and charging screen (via debug defines) behaves identically to the Phase 12 validated baseline
+  4. Charging screen activates within 2s when charger output_current > 0.5A (VAL-02, requires live charger)
+  5. Drive screen restores within 1.8-2.5s after charger CAN frames stop (VAL-03, requires live charger)
+  6. Charging screen labels show plausible live values with active charger (VAL-07)
+**Plans**: 3 plans
+Plans:
+- [ ] 15-01-PLAN.md — Restore Config.h clean state and run zero-warning build; fix all warnings inline
+- [ ] 15-02-PLAN.md — Hardware smoke test: drive screen visuals, CAN timeout error overlay, debug define screen switching
+- [ ] 15-03-PLAN.md — Live charger hardware tests: VAL-02 (charger activation), VAL-03 (watchdog restore), VAL-07 (label accuracy)
 
 ## Progress
 
@@ -99,6 +109,6 @@ Plans:
 | 10. UI Integration | v1.6 | 3/3 | Complete | 2026-04-20 |
 | 11. Validation & Performance | v1.6 | 3/3 | Complete | 2026-05-05 |
 | 12. Screen Transition Validation | v1.7 | 2/2 | Complete | 2026-05-05 |
-| 13. Shared Infrastructure Extraction | v1.7 | 0/1 | Not started | - |
-| 14. Per-Screen File Extraction | v1.7 | 0/? | Not started | - |
-| 15. Post-Refactor Verification | v1.7 | 0/? | Not started | - |
+| 13. Shared Infrastructure Extraction | v1.7 | 1/1 | Complete | 2026-05-06 |
+| 14. Per-Screen File Extraction | v1.7 | 3/3 | Complete | 2026-05-07 |
+| 15. Post-Refactor Verification | v1.7 | 0/3 | Not started | - |
