@@ -28,7 +28,7 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 ### v1.7 Screen Separation (Phases 12-15)
 
 - [x] **Phase 12: Screen Transition Validation** — Verify charging/drive switching and debug override defines on hardware (completed 2026-05-05, VAL-02/03 deferred to Phase 15)
-- [ ] **Phase 13: Shared Infrastructure Extraction** — Extract shared header (color macros, arc helper, error mux) that both screen files can include
+- [x] **Phase 13: Shared Infrastructure Extraction** — Extract shared header (color macros, arc helper, error mux) that both screen files can include (completed 2026-05-06)
 - [ ] **Phase 14: Per-Screen File Extraction** — Create DriveScreen and ChargingScreen files; split DashboardWidgets; reduce DashboardUI to coordinator
 - [ ] **Phase 15: Post-Refactor Verification** — Compile clean and smoke test on hardware; confirm behavior unchanged
 
@@ -59,7 +59,7 @@ Plans:
   3. No widget construction or screen-specific logic is present in the shared header
 **Plans**: 1 plan
 Plans:
-- [ ] 13-01-PLAN.md — Create DashboardShared.h and wire DashboardUI.h/DashboardUI.cpp to use it
+- [x] 13-01-PLAN.md — Create DashboardShared.h and wire DashboardUI.h/DashboardUI.cpp to use it
 
 ### Phase 14: Per-Screen File Extraction
 **Goal**: `DriveScreen.h/.cpp` and `ChargingScreen.h/.cpp` exist as self-contained translation units; `DashboardWidgets` is split; `DashboardUI.cpp` contains only coordinator logic
