@@ -782,14 +782,6 @@ static void refresh_drive_ui(const DashboardState &state)
         static uint32_t last_crit_carousel_ms = 0;
         taskENTER_CRITICAL(&g_error_list_mux);
 
-        // Count active critical errors
-        int crit_count = 0;
-        for (int i = 0; i < MAX_ACTIVE_ERRORS; i++) {
-            if (state.error_list.errors[i].is_active && state.error_list.errors[i].severity == ErrorSeverity::CRIT) {
-                crit_count++;
-            }
-        }
-
         // Rotate index every interval
         if (millis() - last_crit_carousel_ms > carousel_interval_ms) {
             crit_carousel_idx++;
