@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.7
 milestone_name: Screen Separation
-status: phase_complete
-stopped_at: Phase 13 complete — ready for Phase 14 planning
-last_updated: "2026-05-06T00:00:00.000Z"
-last_activity: 2026-05-06
+status: ready_to_execute
+stopped_at: Phase 15 context gathered — ready for planning
+last_updated: "2026-05-07T00:00:00.000Z"
+last_activity: 2026-05-07
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 3
-  percent: 50
+  completed_phases: 3
+  total_plans: 10
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-05-05)
 
 ## Current Position
 
-Phase: 14 — Per-Screen File Extraction (not yet planned)
-Status: Phase 13 complete (1/1 plans). Phase 14 planning required.
-Last activity: 2026-05-06 — Phase 13 execution complete
+Phase: 15 — Post-Refactor Verification (plans TBD)
+Status: Phase 14 complete. Phase 15 post-refactor verification is next.
+Last activity: 2026-05-07 — Phase 15 context gathered (zero-warning build + targeted hardware smoke test)
 
-Progress: [████░░░░░░] 50% — v1.7 phases 12-13 complete, phases 14-15 pending
+Progress: [██████░░░░] 75% — v1.7 phases 12-14 complete, phase 15 pending
 
 ## Accumulated Context
 
@@ -41,6 +41,8 @@ Progress: [████░░░░░░] 50% — v1.7 phases 12-13 complete, p
 - [v1.7]: Validation phase runs before any refactor — verify correctness first, then touch code structure.
 - [v1.7]: Shared infra header extracted (Phase 13) before per-screen files created (Phase 14) — dependency order prevents include-cycle errors.
 - [v1.7]: EMA filter instances and dirty-check statics move to DriveScreen.cpp after refactor.
+- [v1.7]: DashboardWidgets removed from DashboardUI.h — widget handles split into DriveWidgets (DriveScreen.h) and ChargingWidgets (ChargingScreen.h).
+- [v1.7]: DashboardUI.cpp reduced to coordinator-only (~90 lines): dashboard_create, dashboard_refresh, dashboardTask. Build: SUCCESS.
 
 ### Quick Tasks Completed
 
@@ -49,8 +51,8 @@ Progress: [████░░░░░░] 50% — v1.7 phases 12-13 complete, p
 | 260422-ldu | make the temperature dials on the display change colors based on their temperature compared to the thresholds | 2026-04-22 | d3b570e | [260422-ldu-make-the-temperature-dials-on-the-displa](./quick/260422-ldu-make-the-temperature-dials-on-the-displa/) |
 
 ## Session Continuity
-Last session: 2026-05-06
-Stopped at: Phase 13 complete. Note: Phase 14 screen-separation work was pre-implemented in the working tree and committed with Phase 13 T2. Phase 14 plan should reflect this — review what's already done before planning new work. Next: `/gsd-discuss-phase 14` or `/gsd-plan-phase 14`
+Last session: 2026-05-07
+Stopped at: Phase 15 context gathered. Next: `/gsd-plan-phase 15` (post-refactor verification)
 
 ### Phase 12 Deferred Items (resolve in Phase 15)
 - VAL-02: Test charger trigger path with active charger (output_current > 0.5A)
