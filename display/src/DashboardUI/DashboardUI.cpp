@@ -125,11 +125,13 @@ void update_error_state(DashboardState *state)
     
     // Check thermistor array for overheating
     for (int i = 0; i < CONFIG_THERMISTOR_COUNT; i++) {
-        if (state->thermistors.temps[i] >= BATT_TEMP_MAX) { // Using gauge max as warning threshold
+        if (state->thermistors.temps[i] >= BATT_TEMP_WARN_CELSIUS) {
             char t_buf[32];
             snprintf(t_buf, sizeof(t_buf), "BMS: THERMISTOR %d HOT", i);
-            add_error_to_list(state->error_list, ErrorSource::BMS, ErrorSeverity::WARN, t_buf);
-            if (max_bms < ErrorSeverity::WARN) max_bms = ErrorSeverity::WARN;
+            ErrorSeverity sev = (state->thermistors.temps[i] >= BATT_TEMP_CRIT_CELSIUS)
+                                ? ErrorSeverity::CRIT : ErrorSeverity::WARN;
+            add_error_to_list(state->error_list, ErrorSource::BMS, sev, t_buf);
+            if (max_bms < sev) max_bms = sev;
         }
     }
 
