@@ -16,10 +16,15 @@
 
 struct ChargingWidgets {
     lv_obj_t *chg_batt_pct_label;
+    lv_obj_t *chg_batt_pct_symbol; // separate "%" label — 144px font lacks the glyph
     lv_obj_t *chg_voltage_label;
     lv_obj_t *chg_current_label;
     lv_obj_t *chg_power_label;
     lv_obj_t *chg_temp_label;
+    lv_obj_t *chg_avg_cell_v_label;
+    lv_obj_t *chg_cell_stddev_label;
+    lv_obj_t *chg_bms_max_temp_label;
+    lv_obj_t *chg_eta_label;
     lv_obj_t *chg_status_label;
     lv_obj_t *chg_bar;
 };

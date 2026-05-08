@@ -13,7 +13,7 @@
 // Global message buffer for CAN reception
 static twai_message_t message;
 
-// Spinlock protecting BatteryVoltages.hv_cell_voltages writes/reads.
+// Spinlock protecting BatteryVoltages.cell_voltages writes/reads.
 portMUX_TYPE g_cell_voltages_mux = portMUX_INITIALIZER_UNLOCKED;
 
 /**

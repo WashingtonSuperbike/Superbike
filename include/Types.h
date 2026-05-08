@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include "Config.h"
+#include "Constants.h"
 
 // ============================================================================
 // FORWARD DECLARATIONS
@@ -159,14 +160,14 @@ struct ThermistorTemps {
 /**
  * Battery cell voltages from BMS
  *
- * hv_cell_voltages_ready: true if cell voltage reported by BMS since boot
- * hv_cell_voltages: HV cell voltages sent by BMS over CAN
- * hv_series_voltage: sum of hv_cell_voltages, updated on CAN receive
+ * cell_voltages_ready: true if cell voltage reported by BMS since boot
+ * cell_voltages: HV cell voltages sent by BMS over CAN
+ * hv_series_voltage: sum of cell_voltages, updated on CAN receive
  * aux_battery_voltage: auxiliary (LV) battery voltage
  */
 struct BatteryVoltages {
-  bool hv_cell_voltages_ready;
-  float hv_cell_voltages[CELL_COUNT];
+  bool cell_voltages_ready;
+  float cell_voltages[CELL_COUNT];
   float hv_series_voltage;
   float aux_battery_voltage;
 };

@@ -42,7 +42,7 @@ static bool writeRow(FsFile &file, const DashboardState &state)
     // Snapshot cell voltages under spinlock (written by CAN path, read here)
     float cells[CELL_COUNT];
     taskENTER_CRITICAL(&g_cell_voltages_mux);
-    memcpy(cells, state.battery.hv_cell_voltages, sizeof(cells));
+    memcpy(cells, state.battery.cell_voltages, sizeof(cells));
     taskEXIT_CRITICAL(&g_cell_voltages_mux);
 
     char buf[512];

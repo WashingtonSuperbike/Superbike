@@ -69,7 +69,7 @@ static void calculateSeriesVoltage(BatteryVoltages *battery_voltages) {
   float partialSeriesVoltage = 0;
   int current_cell;
   for (current_cell = 0; current_cell < CELL_COUNT; current_cell++) {
-    partialSeriesVoltage += battery_voltages->hv_cell_voltages[current_cell];
+    partialSeriesVoltage += battery_voltages->cell_voltages[current_cell];
   }
   battery_voltages->hv_series_voltage = partialSeriesVoltage;
 }
@@ -87,19 +87,19 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
 
   for (cellIndex = 0; cellIndex < 4; cellIndex++) {
     uint16_t *buf = (uint16_t *)msg.buf;
-    battery_voltages->hv_cell_voltages[cellIndex + totalOffset] = ((float)buf[cellIndex]) / 10000;
+    battery_voltages->cell_voltages[cellIndex + totalOffset] = ((float)buf[cellIndex]) / 10000;
     hv_cell_detected[cellIndex + totalOffset] = true;
   }
   
   calculateSeriesVoltage(battery_voltages);
 
-  if (!battery_voltages->hv_cell_voltages_ready) {
+  if (!battery_voltages->cell_voltages_ready) {
     for (int i = 0; i < CELL_COUNT; i++ ) {
       if (!hv_cell_detected[i]) {
         return;
       }
     }
-    battery_voltages->hv_cell_voltages_ready = true;
+    battery_voltages->cell_voltages_ready = true;
   }
 }
 

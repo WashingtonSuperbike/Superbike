@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.7
-milestone_name: Screen Separation
+milestone: v1.8
+milestone_name: UI Enhancements
 status: ready_to_execute
-stopped_at: Phase 15 context gathered — ready for planning
+stopped_at: Phase 16 complete. Phase 17 deferred.
 last_updated: "2026-05-07T00:00:00.000Z"
 last_activity: 2026-05-07
 progress:
-  total_phases: 4
-  completed_phases: 3
-  total_plans: 10
-  completed_plans: 6
-  percent: 75
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 16
+  completed_plans: 12
+  percent: 81
 ---
 
 # Project State
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-05)
 
 **Core value**: A self-contained display module that presents live telemetry clearly — the rider's window into the motorcycle's state.
-**Current focus**: Milestone v1.7 Screen Separation
+**Current focus**: Milestone v1.8 UI Enhancements (Phase 16 Complete)
 
 ## Current Position
 
-Phase: 15 — Post-Refactor Verification (plans TBD)
-Status: Phase 14 complete. Phase 15 post-refactor verification is next.
-Last activity: 2026-05-07 — Phase 15 context gathered (zero-warning build + targeted hardware smoke test)
+Phase: 16 — Regen Estimation Logic (Complete)
+Status: Phase 16 shipped. Phase 17 deferred by user.
+Last activity: 2026-05-07 — Phase 16 verification passed.
 
-Progress: [██████░░░░] 75% — v1.7 phases 12-14 complete, phase 15 pending
+Progress: [████████░░] 81% — v1.1-v1.8 (Phase 16) complete.
 
 ## Accumulated Context
 
@@ -37,12 +37,13 @@ Progress: [██████░░░░] 75% — v1.7 phases 12-14 complete, p
 - [v1.6]: EMAFilter with O(1) update, 4-byte state, snap-to init.
 - [v1.6]: Anti-flicker policy: τ=0.1s uniform for speed/voltages/current/gyro.
 - [v1.6]: Temperatures raw — physical inertia is sufficient, no EMA needed.
-- [v1.6]: Spec EMA smoothing in settle time (3×tau), not tau value.
-- [v1.7]: Validation phase runs before any refactor — verify correctness first, then touch code structure.
-- [v1.7]: Shared infra header extracted (Phase 13) before per-screen files created (Phase 14) — dependency order prevents include-cycle errors.
-- [v1.7]: EMA filter instances and dirty-check statics move to DriveScreen.cpp after refactor.
-- [v1.7]: DashboardWidgets removed from DashboardUI.h — widget handles split into DriveWidgets (DriveScreen.h) and ChargingWidgets (ChargingScreen.h).
-- [v1.7]: DashboardUI.cpp reduced to coordinator-only (~90 lines): dashboard_create, dashboard_refresh, dashboardTask. Build: SUCCESS.
+- [v1.7]: Shared infra header extracted (Phase 13) before per-screen files created (Phase 14).
+- [v1.7]: DashboardWidgets removed from DashboardUI.h — handles split into DriveWidgets and ChargingWidgets.
+- [v1.7]: Status icons (BMS/MC) boot to gray and only turn green on data.
+- [v1.7]: CAN timeout decoupled from critical error modal; modal reserved for real faults.
+- [v1.8]: Regen estimation heuristic: if current≈0 and speed>5 and throttle≈0, estimate regen based on speed.
+- [v1.8]: Animation framework: replace fade with motorcycle plug-in/unplug GIF animation.
+
 
 ### Quick Tasks Completed
 

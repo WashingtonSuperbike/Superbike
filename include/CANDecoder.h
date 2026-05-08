@@ -94,19 +94,19 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
     for (int i = 0; i < 4; i++) {
         int idx = i + totalOffset;
         if (idx >= 0 && idx < CELL_COUNT) {
-            battery->hv_cell_voltages[idx] = parsed[i];
+            battery->cell_voltages[idx] = parsed[i];
             hv_cell_detected[idx] = true;
         }
     }
 
     float sum = 0.0f;
     for (int i = 0; i < CELL_COUNT; i++) {
-        sum += battery->hv_cell_voltages[i];
+        sum += battery->cell_voltages[i];
     }
     battery->hv_series_voltage = sum;
     if (mux) taskEXIT_CRITICAL(mux);
 
-    if (!battery->hv_cell_voltages_ready) {
+    if (!battery->cell_voltages_ready) {
         bool all_detected = true;
         for (int i = 0; i < CELL_COUNT; i++) {
             if (!hv_cell_detected[i]) {
@@ -114,7 +114,7 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
                 break;
             }
         }
-        battery->hv_cell_voltages_ready = all_detected;
+        battery->cell_voltages_ready = all_detected;
     }
 }
 

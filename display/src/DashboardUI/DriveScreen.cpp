@@ -550,10 +550,20 @@ void drive_screen_refresh(const DashboardState &state)
     }
 
     // -- Motor current arcs --
-    float abs_current = fabsf(s_current);
-    if (abs_current > 100.0f) abs_current = 100.0f;
+    float display_current = s_current;
     int cur_dir = (s_current > 0.0f) ? 1 : (s_current < 0.0f) ? -1 : 0;
+
+    // HEURISTIC: Estimate regen if raw current is ~0 but we are at speed with closed throttle
+    if (fabsf(s_current) < 0.5f && speed > 5 && state.temps.throttle < 0.05f) {
+        display_current = -((float)speed * 0.5f); // Estimate 0.5A per mph regen
+        if (display_current < -40.0f) display_current = -40.0f; // Clamp to 40A
+        cur_dir = -1;
+    }
+
+    float abs_current = fabsf(display_current);
+    if (abs_current > 100.0f) abs_current = 100.0f;
     int32_t cur_val = (int32_t)abs_current;
+
     if (cur_dir != prev_current_dir || cur_val != prev_current_value) {
         if (cur_dir > 0) {
             lv_arc_set_value(w.current_motoring_arc, cur_val);
@@ -635,14 +645,16 @@ void drive_screen_refresh(const DashboardState &state)
     }
 
     // -- BMS/MC Status Icons --
-    auto get_sev_color = [](ErrorSeverity sev) {
+    // Icons boot to CLR_DISABLED (gray) and stay gray if no data is received or if timeout occurs
+    auto get_source_color = [&](ErrorSeverity sev, uint32_t last_rx) {
+        if (last_rx == 0 || (millis() - last_rx > CAN_TIMEOUT_MS)) return CLR_DISABLED;
         if (sev == ErrorSeverity::CRIT) return CLR_WARN_RED;
         if (sev == ErrorSeverity::WARN) return CLR_WARN_YELLOW;
         if (sev == ErrorSeverity::INFO) return CLR_WHITE;
         return CLR_STATUS_GREEN;
     };
-    lv_obj_set_style_text_color(w.bms_status_label, get_sev_color(state.bms_severity.load()), 0);
-    lv_obj_set_style_text_color(w.mc_status_icon,   get_sev_color(state.mc_severity.load()), 0);
+    lv_obj_set_style_text_color(w.bms_status_label, get_source_color(state.bms_severity.load(), state.bms_last_rx_ms), 0);
+    lv_obj_set_style_text_color(w.mc_status_icon,   get_source_color(state.mc_severity.load(),  state.motor_last_rx_ms), 0);
 
     // -- Warning Carousel --
     static int carousel_idx = 0;
@@ -689,7 +701,8 @@ void drive_screen_refresh(const DashboardState &state)
     taskEXIT_CRITICAL(&g_error_list_mux);
 
     // -- Critical Error Modal (v1.5) --
-    // Show instantly if any CRIT error exists. Priority: CRIT > Carousel.
+    // Show instantly if any real CRIT error exists from BMS or MC.
+    // Does NOT trigger for CAN timeouts as those do not escalate bms_severity/mc_severity.
     bool crit_active = (state.bms_severity.load() == ErrorSeverity::CRIT ||
                         state.mc_severity.load() == ErrorSeverity::CRIT);
 

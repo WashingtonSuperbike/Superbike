@@ -2,7 +2,7 @@
 #include "CANDecoder.h"
 
 // ---------------------------------------------------------------------------
-// Spinlock protecting BatteryVoltages.hv_cell_voltages writes/reads.
+// Spinlock protecting BatteryVoltages.cell_voltages writes/reads.
 // Extern declaration in DashboardUI.h; used by Logging/logging.cpp for reads.
 portMUX_TYPE g_cell_voltages_mux = portMUX_INITIALIZER_UNLOCKED;
 

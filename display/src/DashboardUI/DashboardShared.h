@@ -42,7 +42,7 @@
 
 // Definitions live in their respective .cpp files (DashboardUI.cpp and CAN_Receive.cpp).
 extern portMUX_TYPE g_error_list_mux;    // Protects DashboardState.error_list updates/reads
-extern portMUX_TYPE g_cell_voltages_mux; // Protects BatteryVoltages.hv_cell_voltages writes/reads
+extern portMUX_TYPE g_cell_voltages_mux; // Protects BatteryVoltages.cell_voltages writes/reads
 
 // ============================================================================
 // HELPER: convert pack voltage to battery percentage (0–100, clamped)
@@ -51,7 +51,7 @@ extern portMUX_TYPE g_cell_voltages_mux; // Protects BatteryVoltages.hv_cell_vol
 static inline float pack_voltage_to_pct(float v)
 {
     float pct = (v - PACK_VOLTAGE_EMPTY_V) / (PACK_VOLTAGE_FULL_V - PACK_VOLTAGE_EMPTY_V) * 100.0f;
-    if (pct > 100.0f) pct = 100.0f;
+    // if (pct > 100.0f) pct = 100.0f;
     if (pct < 0.0f)   pct = 0.0f;
     return pct;
 }
@@ -68,7 +68,7 @@ static inline lv_color_t temp_arc_color(float temp, float warn, float crit)
 }
 
 // ============================================================================
-// HELPER: create a temperature arc (right column)
+// HELPER: create a temperature arc
 // ============================================================================
 
 inline void create_temp_arc(lv_obj_t *parent, lv_obj_t **arc, lv_obj_t **label,

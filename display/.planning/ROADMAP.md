@@ -8,7 +8,8 @@
 - ✅ **v1.3 CAN Bus Integration** — Phase 4 (shipped 2026-04-20)
 - ✅ **v1.5 Errors and Warnings** — Phases 05-08 (completed 2026-04-20)
 - ✅ **v1.6 Data Smoothing** — Phases 09-11 (shipped 2026-05-05)
-- 🔄 **v1.7 Screen Separation** — Phases 12-15 (in progress)
+- ✅ **v1.7 Screen Separation** — Phases 12-15 (completed 2026-05-07)
+- 🔄 **v1.8 UI Enhancements** — Phases 16-17 (planned)
 
 ---
 
@@ -30,7 +31,34 @@ Full details: `.planning/milestones/v1.6-ROADMAP.md`
 - [x] **Phase 12: Screen Transition Validation** — Verify charging/drive switching and debug override defines on hardware (completed 2026-05-05, VAL-02/03 deferred to Phase 15)
 - [x] **Phase 13: Shared Infrastructure Extraction** — Extract shared header (color macros, arc helper, error mux) that both screen files can include (completed 2026-05-06)
 - [x] **Phase 14: Per-Screen File Extraction** — Create DriveScreen and ChargingScreen files; split DashboardWidgets; reduce DashboardUI to coordinator (completed 2026-05-07)
-- [ ] **Phase 15: Post-Refactor Verification** — Compile clean and smoke test on hardware; confirm behavior unchanged
+- [x] Phase 15: Post-Refactor Verification (completed 2026-05-07)
+
+</details>
+
+### v1.8 UI Enhancements (Phases 16-17)
+
+- [x] **Phase 16: Regen Estimation Logic** — Implement heuristic to estimate regen amperage when MC reports 0A at speed (> 5mph) (completed 2026-05-07).
+- [ ] **Phase 17: Plug-in Animation Framework** — Replace screen fade with a custom motorcycle plug-in/unplug animation (DEFERRED).
+
+## Phase Details
+
+### Phase 16: Regen Estimation Logic
+**Goal**: Populate the green regen recovery bar even when the motor controller doesn't report negative amperage over CAN.
+**Requirements**: REGEN-01, REGEN-02
+**Success Criteria**:
+  1. When `motor_current == 0` and `speed > 5 mph`, `regen_current` is estimated using a formula based on speed (and potentially brake/throttle state).
+  2. The green regen arc on the drive screen reflects the estimated value.
+  3. The estimate falls to 0 when speed drops below 5 mph or motoring current becomes non-zero.
+
+### Phase 17: Plug-in Animation Framework
+**Goal**: Seamless, visually rich transition between drive and charging states using custom media.
+**Requirements**: ANIM-01, ANIM-02, ANIM-03
+**Success Criteria**:
+  1. Charger plug-in triggers a full-screen animation (motorcycle plugging in).
+  2. Transition to charging screen occurs *after* the animation finishes.
+  3. Charger unplug triggers the reverse animation before restoring the drive screen.
+  4. Supports GIF or frame-sequence from SD card or flash.
+
 
 ## Phase Details
 
@@ -111,4 +139,6 @@ Plans:
 | 12. Screen Transition Validation | v1.7 | 2/2 | Complete | 2026-05-05 |
 | 13. Shared Infrastructure Extraction | v1.7 | 1/1 | Complete | 2026-05-06 |
 | 14. Per-Screen File Extraction | v1.7 | 3/3 | Complete | 2026-05-07 |
-| 15. Post-Refactor Verification | v1.7 | 0/3 | Not started | - |
+| 15. Post-Refactor Verification | v1.7 | 2/2 | Complete | 2026-05-07 |
+| 16. Regen Estimation Logic | v1.8 | 1/1 | Complete | 2026-05-07 |
+| 17. Plug-in Animation Framework | v1.8 | 0/0 | Deferred | - |
