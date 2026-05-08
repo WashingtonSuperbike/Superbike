@@ -82,14 +82,14 @@ void charging_screen_build(lv_obj_t *scr)
         lv_obj_align(*lbl, LV_ALIGN_CENTER, 0, 8);
     };
 
-    create_stat(&w.chg_voltage_label, "VOLTAGE");
-    create_stat(&w.chg_current_label, "CURRENT");
-    create_stat(&w.chg_power_label, "POWER");
-    create_stat(&w.chg_temp_label, "CHG TEMP");
+    create_stat(&w.chg_voltage_label, "PACK VOLTAGE");
+    create_stat(&w.chg_current_label, "CHARGE CURRENT");
+    create_stat(&w.chg_power_label, "INPUT POWER");
+    create_stat(&w.chg_temp_label, "CHARGE TEMP");
     create_stat(&w.chg_avg_cell_v_label, "AVG CELL V");
-    create_stat(&w.chg_cell_stddev_label, "CELL STDEV");
-    create_stat(&w.chg_bms_max_temp_label, "BMS MAX T");
-    create_stat(&w.chg_eta_label, "ETA TO 100%");
+    create_stat(&w.chg_cell_stddev_label, "CELL DEVIATION");
+    create_stat(&w.chg_bms_max_temp_label, "MAX CELL TEMP");
+    create_stat(&w.chg_eta_label, "TIME TO 100%");
 
     w.chg_status_label = lv_label_create(scr);
     lv_obj_align(w.chg_status_label, LV_ALIGN_TOP_LEFT, 20, 20);
