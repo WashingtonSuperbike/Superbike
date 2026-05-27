@@ -92,8 +92,10 @@ void charging_screen_build(lv_obj_t *scr)
     create_stat(&w.chg_eta_label, "TIME TO 100%");
 
     w.chg_status_label = lv_label_create(scr);
-    lv_obj_align(w.chg_status_label, LV_ALIGN_TOP_LEFT, 20, 20);
+    // lv_obj_align(w.chg_status_label, LV_ALIGN_TOP_LEFT, 20, 20);
+    lv_obj_align_to(w.chg_status_label, w.chg_batt_pct_label, LV_ALIGN_OUT_BOTTOM_MID, -50, 20);
     lv_obj_set_style_text_color(w.chg_status_label, CLR_STATUS_GREEN, 0);
+    lv_obj_set_style_text_font(w.chg_status_label, &lv_font_montserrat_24, 0);
     lv_label_set_text(w.chg_status_label, "CHARGING ACTIVE");
 }
 
@@ -104,9 +106,6 @@ void charging_screen_build(lv_obj_t *scr)
 void charging_screen_refresh(const DashboardState &state)
 {
     char buf[32];
-    static float s_last_pct = -1.0f;
-    static uint32_t s_last_ms = 0;
-    static float s_pct_rate_per_hr = 0.0f;
 
     // Battery %
     float voltage = state.battery.hv_series_voltage;
@@ -185,29 +184,12 @@ void charging_screen_refresh(const DashboardState &state)
         lv_label_set_text(w.chg_bms_max_temp_label, "--");
     }
 
-    // ETA to 100% from observed % ramp rate
-    uint32_t now_ms = millis();
-    if (s_last_ms != 0 && now_ms > s_last_ms) {
-        float dt_ms = (float)(now_ms - s_last_ms);
-        float dpct = pct_chg_f - s_last_pct;
-        if (dpct >= 0.0f) {
-            float inst_rate_pct_hr = (dpct * 3600000.0f) / dt_ms;
-            if (inst_rate_pct_hr > 0.01f) {
-                s_pct_rate_per_hr = (s_pct_rate_per_hr <= 0.0f)
-                                        ? inst_rate_pct_hr
-                                        : (0.2f * inst_rate_pct_hr + 0.8f * s_pct_rate_per_hr);
-            }
-        } else if (dpct < -0.5f) {
-            s_pct_rate_per_hr = 0.0f;
-        }
-    }
-    s_last_pct = pct_chg_f;
-    s_last_ms = now_ms;
-
-    if (state.charger.output_current < 0.1f || s_pct_rate_per_hr <= 0.05f || pct_chg_f >= 99.9f) {
+    // ETA to 100% from charge current and pack capacity
+    if (state.charger.output_current < 0.1f || pct_chg_f >= 99.9f) {
         lv_label_set_text(w.chg_eta_label, "--");
     } else {
-        float hours_remaining = (100.0f - pct_chg_f) / s_pct_rate_per_hr;
+        float ah_remaining    = PACK_CAPACITY_AH * (1.0f - pct_chg_f / 100.0f);
+        float hours_remaining = ah_remaining / state.charger.output_current;
         if (hours_remaining > 99.0f) {
             lv_label_set_text(w.chg_eta_label, ">99h");
         } else if (hours_remaining < 1.0f) {
@@ -216,11 +198,8 @@ void charging_screen_refresh(const DashboardState &state)
             lv_label_set_text(w.chg_eta_label, buf);
         } else {
             int hours = (int)hours_remaining;
-            int mins = (int)((hours_remaining - (float)hours) * 60.0f + 0.5f);
-            if (mins >= 60) {
-                mins = 0;
-                hours++;
-            }
+            int mins  = (int)((hours_remaining - (float)hours) * 60.0f + 0.5f);
+            if (mins >= 60) { mins = 0; hours++; }
             snprintf(buf, sizeof(buf), "%dh %02dm", hours, mins);
             lv_label_set_text(w.chg_eta_label, buf);
         }
@@ -228,7 +207,7 @@ void charging_screen_refresh(const DashboardState &state)
 
     // Status
     if (state.charger.output_current < 0.1f) {
-        lv_label_set_text(w.chg_status_label, "CHARGER CONNECTED - IDLE");
+        lv_label_set_text(w.chg_status_label, "CHARGER IDLE");
         lv_obj_set_style_text_color(w.chg_status_label, CLR_WHITE, 0);
     } else {
         lv_label_set_text(w.chg_status_label, "CHARGING ACTIVE");

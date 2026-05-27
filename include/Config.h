@@ -14,5 +14,5 @@
 #define REFRESH_RATE_HZ 30.0f
 
 // DEBUG FLAGS: Uncomment one of these to force the dashboard to only show a specific screen.
-#define DEBUG_SPEEDOMETER_SCREEN_ONLY
+// #define DEBUG_SPEEDOMETER_SCREEN_ONLY
 // #define DEBUG_CHARGING_SCREEN_ONLY
