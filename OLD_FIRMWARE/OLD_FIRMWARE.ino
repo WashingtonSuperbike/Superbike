@@ -10,7 +10,6 @@ using namespace arduino;
 #include "CAN.h"
 #include "DataLogging.h"
 #include "config.h"
-#include "Display.h"
 #include "Precharge.h"
 #include "GPIO.h"
 #include <TimeLib.h>
@@ -19,12 +18,11 @@ static Context bike_context;
 static Context *context = &bike_context;
 
 
-TaskHandle_t *displayTaskHandle;
 TaskHandle_t *canTaskHandle;
 TaskHandle_t *dataloggingTaskHandle;
 TaskHandle_t *prechargeTaskHandle;
 
-TaskHandle_t *taskHandles[] = {displayTaskHandle, canTaskHandle, dataloggingTaskHandle, prechargeTaskHandle};
+TaskHandle_t *taskHandles[] = {canTaskHandle, dataloggingTaskHandle, prechargeTaskHandle};
 
 void setup() {
   
@@ -36,8 +34,6 @@ void setup() {
   /* on brand new board, run File->Examples->Time->TimeTeensy3 and open the serial port. That will set the internal time to the real world clock */
   setTime(Teensy3Clock.get());
 
-  initDisplay(context);
-
   initCAN();
 
   /// Then this method calls on the setupI2C() method which just initializes the I2C communication protocol,
@@ -47,18 +43,17 @@ void setup() {
 
   /* Create each task (not started until scheduler starts).                                * 
    * Each task has a priority, and higher priority tasks will preempt lower priority tasks */
-  portBASE_TYPE s1, s2, s3, s4, s5;
+  portBASE_TYPE s1, s2, s3, s4;
 
   s1 = xTaskCreate(preChargeTask, "PRECHARGE TASK", PRECHARGE_TASK_STACK_SIZE, (void *)&context, 5, prechargeTaskHandle);
   // make sure to set CAN_NODES in config.h
   s2 = xTaskCreate(canTask, "CAN TASK", CAN_TASK_STACK_SIZE, (void *)&context, 4, canTaskHandle);
   s3 = xTaskCreate(idleTask, "IDLE_TASK", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-  s4 = xTaskCreate(displayTask, "DISPLAY TASK", DISPLAY_TASK_STACK_SIZE, (void*)&context, 3, displayTaskHandle);
-  s5 = xTaskCreate(dataLoggingTask, "DATA LOGGING TASK", DATALOGGING_TASK_STACK_SIZE, (void*)&context, 2, dataloggingTaskHandle);
+  s4 = xTaskCreate(dataLoggingTask, "DATA LOGGING TASK", DATALOGGING_TASK_STACK_SIZE, (void*)&context, 2, dataloggingTaskHandle);
 
-  /* If any tasks failed to create, don't continue. */  
-  if (s1 != pdPASS || s2 != pdPASS || s3 != pdPASS || s4 != pdPASS || s5 != pdPASS) {
-    Serial.printf("Failed to create tasks: %d %d %d %d %d", s1, s2, s3, s4, s5);
+  /* If any tasks failed to create, don't continue. */
+  if (s1 != pdPASS || s2 != pdPASS || s3 != pdPASS || s4 != pdPASS) {
+    Serial.printf("Failed to create tasks: %d %d %d %d", s1, s2, s3, s4);
     while (1);
   }
 
