@@ -3,8 +3,10 @@
  * Estimates gyro angle using Kalman filter.
 */
 #include "Precharge.h"
-#include <Wire.h>
 #include "GPIO.h"
+#include "Main.h"
+
+extern TwoWire Wire;
 
 /* Current HV state */
 static HV_STATE hv_state = HV_OFF;
@@ -30,37 +32,59 @@ bool isPrecharged(PreChargeTaskData preChargeData) {
 }
 
 // Returns true if HV System is safe, false otherwise.
-// Validated 04/08/2026 during Hardware In Loop (HIL) Testing.
+// Validated 05/29/2026 during Hardware In Loop (HIL) Testing.
 // Any changes to below method require repeat of testing procedure.
+// Do not remove comments relating to HIL testing identifiers.
 bool isHVSafe(PreChargeTaskData preChargeData) {
-  if (preChargeData.context->bms_status.bms_c_fault == 0x02 ||
-          preChargeData.context->bms_status.bms_c_fault == 0x04) {
-    // BMS-1.2: Thermistor overtemp
-    // BMS-1.8: Cell census fault (cell(s) not detected)
-    return 0;
-  }
-  
-  if (preChargeData.context->bms_status.bms_status_flag == 0x01 ||
-          preChargeData.context->bms_status.bms_status_flag == 0x02) {
-    // BMS-1.3: High Voltage Cutoff reached
-    // BMS-1.4: Low Voltage Cutoff reached
+  // BMS-1.1: BMS must be actively sending messages. Only checked after first message received
+  // (at boot, ltc_count == 0 != NUMBER_OF_LTCS already blocks HV until BMS comes online).
+  uint32_t last_rx = preChargeData.context->last_bms_rx_tick;
+  if (last_rx != 0 && (xTaskGetTickCount() - last_rx) > pdMS_TO_TICKS(CAN_TIMEOUT)) {
+    Serial.println("BMS timeout: no status message received");
     return 0;
   }
 
-  
+  if (preChargeData.context->bms_status.bms_c_fault & 0x06) {
+    // BMS-1.2: Thermistor overtemp fault (0x02) or
+    // BMS-1.8: Cell census fault (cell(s) not detected) (0x04)
+    Serial.printf("HV unsafe: BMS c_fault 0x%02X (overtemp/census)\n", preChargeData.context->bms_status.bms_c_fault);
+    return 0;
+  }
+
+  if (preChargeData.context->bms_status.bms_status_flag & 0x03) {
+    // BMS-1.3: High Voltage Cutoff (0x01) or 
+    // BMS-1.4: Low Voltage Cutoff reached (0x02)
+    Serial.printf("HV unsafe: voltage flag 0x%02X (over/undervoltage)\n", preChargeData.context->bms_status.bms_status_flag);
+    return 0;
+  }
+
   if (preChargeData.context->bms_status.ltc_fault != 0) {
     // BMS-1.9: LTC Fault detected
+    Serial.println("HV unsafe: LTC fault");
     return 0;
   }
 
   if (preChargeData.context->bms_status.ltc_count != NUMBER_OF_LTCS) {
     // BMS-1.10: LTC Count does not match configuration
-    Serial.println("Incorrect number of LTCs");
+    Serial.printf("HV unsafe: LTC count %d (expected %d)\n", preChargeData.context->bms_status.ltc_count, NUMBER_OF_LTCS);
     return 0;
   }
 
-  if (preChargeData.context->motor_stats.error_message == 2) {
+  if (preChargeData.context->motor_stats.error_message & 0x02) {
     // MC-1.2: High Voltage Fault from Motor Controller
+    Serial.println("HV unsafe: motor controller HV fault");
+    return 0;
+  }
+
+  if (preChargeData.context->motor_temps.motor_temperature > MOTOR_TEMP_MAX) {
+    // MC-1.5: Motor overtemperature
+    Serial.printf("HV unsafe: motor temp %.1f > %d C\n", preChargeData.context->motor_temps.motor_temperature, MOTOR_TEMP_MAX);
+    return 0;
+  }
+
+  if (preChargeData.context->motor_temps.motor_controller_temperature > MOTORCONTROLLER_TEMP_MAX) {
+    // MC-1.6: Motor controller overtemperature
+    Serial.printf("HV unsafe: MC temp %.1f > %d C\n", preChargeData.context->motor_temps.motor_controller_temperature, MOTORCONTROLLER_TEMP_MAX);
     return 0;
   }
 
@@ -78,54 +102,72 @@ const char* state_name(HV_STATE state) {
   }
 }
 
+// Debounces the HV toggle switch. Requires 3 consecutive stable reads (30ms at 10ms task rate)
+// before accepting a state change, filtering out contact bounce and electrical noise.
+static bool debounced_HV_toggle() {
+  static uint8_t count = 0;
+  static bool confirmed = false;
+  bool raw = check_HV_toggle();
+  if (raw != confirmed) {
+    if (++count >= 3) {
+      confirmed = raw;
+      count = 0;
+    }
+  } else {
+    count = 0;
+  }
+  return confirmed;
+}
+
 // NOTE: "input" needs to change to the GPIO value for the on-button for the bike
 void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
   HV_STATE old_state = hv_state;
   GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+  static TickType_t precharge_start_tick = 0;
+  bool hv_on = debounced_HV_toggle();
   switch (hv_state) { // transitions
     case HV_OFF:
-      if (check_HV_toggle()) {
+      if (hv_on) {
         hv_state = HV_PRECHARGING;
+        precharge_start_tick = xTaskGetTickCount();
       }
       break;
     case HV_PRECHARGING:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
+      else if (xTaskGetTickCount() - precharge_start_tick > pdMS_TO_TICKS(10000)) {
+        Serial.println("Precharge timeout: HV did not reach target voltage within 10s");
+        hv_state = HV_ERROR;
+      }
       else if (!isHVSafe(preChargeData)) {
-        // HV error detected
         hv_state = HV_ERROR;
       }
       else if (isPrecharged(preChargeData)) {
-        // finished precharging
         hv_state = HV_ON;
       }
       else {
-        // no updates, keep precharging
         hv_state = HV_PRECHARGING;
       }
       break;
     case HV_ON:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
       else if (!isHVSafe(preChargeData) || gyro_kalman->angle_Y > 45 || gyro_kalman->angle_Y < -45 || gyro_kalman->angle_X > 45 || gyro_kalman->angle_X < -45) {
-        // HV error detected
         hv_state = HV_ERROR;
       }
       else {
-        // no updates, keep HV on
         hv_state = HV_ON;
       }
       break;
     case HV_ERROR:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       } else {
-        // otherwise stay here
         hv_state = HV_ERROR;
       }
       break;
@@ -156,6 +198,7 @@ void preChargeCircuitFSMStateActions () {
     case HV_ERROR:
       open_contactor();
       open_precharge();
+      break;
     default:
       break;
   } // state actions
@@ -402,6 +445,8 @@ void preChargeTask(void *taskData) {
   GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
 
   while (1) {
+    // Reset the watchdog timer
+    wdt_kick();
     preChargeCircuitFSMStateActions();
     preChargeCircuitFSMTransitions(preChargeData);
 

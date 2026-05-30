@@ -67,9 +67,10 @@ bool startSD() {
   // Raise priority to prevent preemption during SDIO hardware init.
   // FIFO_SDIO init programs the SDHC peripheral state machine — a context
   // switch mid-init corrupts it and produces a bus fault on the next access.
+  UBaseType_t saved = uxTaskPriorityGet(NULL);
   vTaskPrioritySet(NULL, configMAX_PRIORITIES - 1);
   bool r = sd.begin(SdioConfig(FIFO_SDIO));
-  vTaskPrioritySet(NULL, 2);  // restore DATA LOGGING TASK priority
+  vTaskPrioritySet(NULL, saved);
   return r;
 }
 

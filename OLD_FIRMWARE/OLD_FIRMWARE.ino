@@ -4,6 +4,14 @@
 #include "arduino_freertos.h"
 
 using namespace arduino;
+// Bring Arduino constants from arduino:: namespace to global namespace
+// for compatibility with FlexCAN_T4 library
+using arduino::HEX;
+
+// Define constrain function for FlexCAN_T4 library compatibility
+#ifndef constrain
+#define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#endif
 
 #include "avr/pgmspace.h"
 #include "Main.h"
@@ -13,16 +21,17 @@ using namespace arduino;
 #include "Precharge.h"
 #include "GPIO.h"
 #include <TimeLib.h>
+#include "Watchdog_t4.h"
+
+WDT_T4<WDT1> wdt;
+
+void wdt_kick() {
+  wdt.feed();
+}
 
 static Context bike_context;
 static Context *context = &bike_context;
 
-
-TaskHandle_t *canTaskHandle;
-TaskHandle_t *dataloggingTaskHandle;
-TaskHandle_t *prechargeTaskHandle;
-
-TaskHandle_t *taskHandles[] = {canTaskHandle, dataloggingTaskHandle, prechargeTaskHandle};
 
 void setup() {
   
@@ -45,17 +54,21 @@ void setup() {
    * Each task has a priority, and higher priority tasks will preempt lower priority tasks */
   portBASE_TYPE s1, s2, s3, s4;
 
-  s1 = xTaskCreate(preChargeTask, "PRECHARGE TASK", PRECHARGE_TASK_STACK_SIZE, (void *)&context, 5, prechargeTaskHandle);
+  s1 = xTaskCreate(preChargeTask, "PRECHARGE TASK", PRECHARGE_TASK_STACK_SIZE, (void *)&context, 5, NULL);
   // make sure to set CAN_NODES in config.h
-  s2 = xTaskCreate(canTask, "CAN TASK", CAN_TASK_STACK_SIZE, (void *)&context, 4, canTaskHandle);
+  s2 = xTaskCreate(canTask, "CAN TASK", CAN_TASK_STACK_SIZE, (void *)&context, 4, NULL);
   s3 = xTaskCreate(idleTask, "IDLE_TASK", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
-  s4 = xTaskCreate(dataLoggingTask, "DATA LOGGING TASK", DATALOGGING_TASK_STACK_SIZE, (void*)&context, 2, dataloggingTaskHandle);
+  s4 = xTaskCreate(dataLoggingTask, "DATA LOGGING TASK", DATALOGGING_TASK_STACK_SIZE, (void*)&context, 2, NULL);
 
   /* If any tasks failed to create, don't continue. */
   if (s1 != pdPASS || s2 != pdPASS || s3 != pdPASS || s4 != pdPASS) {
     Serial.printf("Failed to create tasks: %d %d %d %d", s1, s2, s3, s4);
     while (1);
   }
+
+  WDT_timings_t wdt_config;
+  wdt_config.timeout = 5; // 5-second hard reset if preChargeTask stops kicking
+  wdt.begin(wdt_config);
 
   Serial.println("Starting the scheduler");
   vTaskStartScheduler();

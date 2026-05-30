@@ -15,4 +15,6 @@ typedef struct _Context {
     CSVWriter logs[CONFIG_LOG_COUNT];
     GyroKalman gyro_kalman;
     bool sd_started;
+    // Tick count of the last received DD_BMS_STATUS_IND message. 0 = never received.
+    uint32_t last_bms_rx_tick;
 } Context;

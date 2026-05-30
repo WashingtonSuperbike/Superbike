@@ -6,11 +6,8 @@
 #include "arduino_freertos.h"
 #include "avr/pgmspace.h"
 
-// Bring Arduino constants from arduino:: namespace to global namespace
-// for compatibility with FlexCAN_T4 library
+// FlexCAN_T4 uses HEX and constrain directly; bridge both from the arduino:: namespace
 using arduino::HEX;
-
-// Define constrain function for FlexCAN_T4 library compatibility
 #ifndef constrain
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 #endif
@@ -57,7 +54,7 @@ void decodeMotorTemps(CAN_message_t msg, MotorTemps *motor_temps) {
 }
 
 void decipherBMSStatus(CAN_message_t msg, BMSStatus *bms_status) {
-  bms_status->bms_status_flag = (float)(msg.buf[0]);
+  bms_status->bms_status_flag = msg.buf[0];
   bms_status->bms_c_id = msg.buf[1];
   bms_status->bms_c_fault = msg.buf[2];
   bms_status->ltc_fault = msg.buf[3];
@@ -90,8 +87,9 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   static bool hv_cell_detected[CONFIG_HV_CELL_COUNT];
 
   for (cellIndex = 0; cellIndex < 4; cellIndex++) {
-    uint16_t *buf = (uint16_t *)msg.buf;
-    battery_voltages->hv_cell_voltages[cellIndex + totalOffset] = ((float)buf[cellIndex]) / 10000;
+    uint16_t raw;
+    memcpy(&raw, &msg.buf[cellIndex * 2], sizeof(raw));
+    battery_voltages->hv_cell_voltages[cellIndex + totalOffset] = ((float)raw) / 10000;
     hv_cell_detected[cellIndex + totalOffset] = true;
   }
   
@@ -117,7 +115,7 @@ void decipherThermistors(CAN_message_t msg, ThermistorTemps *thermistor_temps) {
   int thermistor;
   for (thermistor = 0; thermistor < 5; thermistor++) {
     thermistor_temps->temps[thermistor + 5 * ltcID] = currentThermistor[thermistor];
-    thermistor_temps->temps_valid[thermistor + 5 + ltcID] = true;
+    thermistor_temps->temps_valid[thermistor + 5 * ltcID] = true;
   }
 }
 
@@ -144,6 +142,7 @@ static void checkCAN(CANTaskData canData) {
         break;
       case DD_BMS_STATUS_IND:
         decipherBMSStatus(CAN_msg, &(context->bms_status));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case EVCC_STATS:
         decipherEVCCStats(CAN_msg, &(context->charge_controller_stats));
@@ -153,24 +152,31 @@ static void checkCAN(CANTaskData canData) {
         break;
       case BMSC1_LTC1_CELLS_04:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC1_CELLS_58:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC1_CELLS_912:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_04:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_58:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_912:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case DD_BMSC_TH_STATUS_IND:
         decipherThermistors(CAN_msg, &(context->thermistor_temps));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
     }
   }
@@ -232,7 +238,7 @@ void canTask(void *canData) {
     if (CAN_NODES != 0) {
       checkCAN(*(CANTaskData *)canData);
       /* Ask for other half of cell voltages from BMS every 2 seconds, test timings later to improve boot performance */
-      if (xTaskGetTickCount() > (last_request + 2000)) {
+      if (xTaskGetTickCount() - last_request > pdMS_TO_TICKS(2000)) {
         requestCellVoltages();
         last_request = xTaskGetTickCount();
       }

@@ -21,9 +21,9 @@
 /// to check the CAN bus if there are 0 nodes connected.
 #define CAN_NODES 1
 
-/// Defines the type of screen to generate in Display.ino.
-/// \note NOTE: COMMENT THIS OUT TO CHANGE DISPLAY TYPE TO SPEEDOMETER!
-#define USE_DEBUGGING_SCREEN
+/// Maximum time (ms) allowed between BMS status messages before isHVSafe() treats
+/// the BMS as offline and forces HV_ERROR. Only enforced after the first message.
+#define CAN_TIMEOUT 2000
 
 /// This exists to be changed based on the final number of thermistors
 /// we settle on having in the code later.

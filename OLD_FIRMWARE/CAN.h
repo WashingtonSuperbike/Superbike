@@ -99,11 +99,10 @@ typedef struct {
  * bms_c_id: cell_id that is reporting a fault
  * bms_c_fault: fault related to cell mentioned above
  * ltc_fault: check datasheet, if ltc is reporting an error
- * ltc_count: how many ltcs are detected, should be 2 for our 20s pack
+ * ltc_count: how many ltcs are detected, should be 2 for our 24s pack
  */
 typedef struct {
-  /* need to change bms_status_flag to int after display feature is completed */
-  float bms_status_flag;
+  int bms_status_flag;
   int bms_c_id;
   int bms_c_fault;
   int ltc_fault;
