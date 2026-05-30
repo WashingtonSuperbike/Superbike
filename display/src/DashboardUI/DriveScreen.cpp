@@ -647,7 +647,7 @@ void drive_screen_refresh(const DashboardState &state)
     // -- BMS/MC Status Icons --
     // Icons boot to CLR_DISABLED (gray) and stay gray if no data is received or if timeout occurs
     auto get_source_color = [&](ErrorSeverity sev, uint32_t last_rx) {
-        if (last_rx == 0 || (millis() - last_rx > CAN_TIMEOUT_MS)) return CLR_DISABLED;
+        if (last_rx == 0 || (millis() - last_rx > CAN_BMS_TIMEOUT_MS_MS)) return CLR_DISABLED;
         if (sev == ErrorSeverity::CRIT) return CLR_WARN_RED;
         if (sev == ErrorSeverity::WARN) return CLR_WARN_YELLOW;
         if (sev == ErrorSeverity::INFO) return CLR_WHITE;

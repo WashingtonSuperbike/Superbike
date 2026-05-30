@@ -12,12 +12,12 @@
 
 /// THIS NEEDS TO BE CHANGED TO OUR ACTUAL NUMBER OF LTCs
 #define NUMBER_OF_LTCS 2
-/// Motor controller temperature max. This might need to be changed
-/// depending on how high the MCU hits during operation.
-#define MOTORCONTROLLER_TEMP_MAX 65
-/// Motor temperature max. This might need to be changed
-/// depending on how high the motor hits during operation.
-#define MOTOR_TEMP_MAX 80
+/// HV trip thresholds. MUST stay equal to the display's crit constants in
+/// include/Constants.h (MC_TEMP_CRIT_CELSIUS / MOTOR_TEMP_CRIT_CELSIUS) so the
+/// dashboard cannot show "green" while the mainboard trips HV. Raised from the
+/// old 65/80 placeholders to the real hardware limits (HIL re-validation req'd).
+#define MOTORCONTROLLER_TEMP_MAX 95   // == MC_TEMP_CRIT_CELSIUS
+#define MOTOR_TEMP_MAX 110            // == MOTOR_TEMP_CRIT_CELSIUS
 
 /// An enum for all the states. OFF, Precharge, ON, Error
 enum HV_STATE {HV_OFF , HV_PRECHARGING, HV_ON, HV_ERROR};
@@ -66,6 +66,13 @@ void preChargeTask(void *taskData);
 bool isPrecharged(PreChargeTaskData preChargeData);
 bool isHVSafe(PreChargeTaskData preChargeData);
 const char* state_name(HV_STATE state);
+
+// Accessors used by the CAN task to build the MAINBOARD_STATUS frame. Each
+// returns a single word written only by preChargeTask, so reads are atomic on
+// the M7 and need no lock.
+HV_STATE get_hv_state();
+uint8_t  get_hv_fault_reason();   // MB_FAULT_REASON ordinal
+uint8_t  get_precharge_pct();     // 0..100
 // I2C Accelerometer/Gyroscope access methods
 void initI2C(GyroKalman *gyro_kalman);
 void gyro_signals(GyroKalman *gyro_kalman);

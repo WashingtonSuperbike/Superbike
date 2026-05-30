@@ -5,6 +5,7 @@
 #include "CAN.h"
 #include "arduino_freertos.h"
 #include "avr/pgmspace.h"
+#include "MainboardProtocol.h"
 
 // FlexCAN_T4 uses HEX and constrain directly; bridge both from the arduino:: namespace
 using arduino::HEX;
@@ -142,6 +143,9 @@ void printMessage(CAN_message_t msg) {
 static void checkCAN(CANTaskData canData) {
   Context *context = canData.bike_context;
   if (CAN_bus.read(CAN_msg)) { // if we read non-zero # of bytes
+    // Any frame is proof the bus is alive — feed the CAN-liveness watchdog
+    // (CAN-1.1 in isHVSafe) and the recovery logic in canTask.
+    context->last_can_rx_tick = xTaskGetTickCount();
     // Serial.printf("Received CAN Message with id %x, buffer[0] = %x\n", CAN_msg.id, CAN_msg.buf[0]);
     switch (CAN_msg.id) {
       case MOTOR_STATS_MSG:
@@ -240,8 +244,38 @@ void requestCellVoltages() {
     next_can_id = BMSC1_LTC1_REQUEST_CELLS;
 }
 
+// Broadcast the mainboard's own derived state for the display. Codes only —
+// the display maps (hv_state, fault_reason) to rider-facing tip text. The
+// rolling counter lets the display detect a frozen/dead mainboard.
+static void sendMainboardStatus() {
+  static uint8_t counter = 0;
+  CAN_message_t msg = {};
+  msg.flags.extended = 1;            // 29-bit ID
+  msg.id = MAINBOARD_STATUS_IND;
+  msg.len = MB_STATUS_DLC;
+  msg.buf[MB_STATUS_OFF_HV_STATE]  = (uint8_t)get_hv_state();
+  msg.buf[MB_STATUS_OFF_FAULT]     = get_hv_fault_reason();
+  msg.buf[MB_STATUS_OFF_COUNTER]   = counter++;
+  msg.buf[MB_STATUS_OFF_PRECHARGE] = get_precharge_pct();
+  CAN_bus.write(msg);
+}
+
+// Reinstall the FlexCAN controller after prolonged bus silence (bus-off /
+// transceiver fault). FlexCAN auto-recovers from bus-off by default; this is a
+// belt-and-suspenders restore. The HV safe-state is handled separately by the
+// CAN-1.1 liveness check in isHVSafe(), which trips HV_ERROR while silent.
+static void recoverCAN() {
+  Serial.println("CAN bus silent — reinstalling controller");
+  CAN_bus.reset();
+  CAN_bus.begin();
+  CAN_bus.setBaudRate(250000);
+}
+
 void canTask(void *canData) {
+  Context *context = ((CANTaskData *)canData)->bike_context;
   TickType_t last_request = xTaskGetTickCount();
+  TickType_t last_status  = xTaskGetTickCount();
+  TickType_t last_recovery = xTaskGetTickCount();
   while (1) {
     /* NOTE: CAN breaks if we try sending messages with 0 other nodes on the bus.
     / Therefore, change CAN_NODES in Main.h to make sure things dont break. */
@@ -251,6 +285,20 @@ void canTask(void *canData) {
       if (xTaskGetTickCount() - last_request > pdMS_TO_TICKS(2000)) {
         requestCellVoltages();
         last_request = xTaskGetTickCount();
+      }
+      /* Broadcast mainboard status for the display at MB_STATUS_PERIOD_MS (10 Hz). */
+      if (xTaskGetTickCount() - last_status > pdMS_TO_TICKS(MB_STATUS_PERIOD_MS)) {
+        sendMainboardStatus();
+        last_status = xTaskGetTickCount();
+      }
+      /* Bus-off recovery: if no frame has arrived for CAN_BUS_TIMEOUT_MS, attempt
+         a controller reinstall, rate-limited to once per CAN_BUS_TIMEOUT_MS. */
+      uint32_t last_rx = context->last_can_rx_tick;
+      if (last_rx != 0 &&
+          (xTaskGetTickCount() - last_rx) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS) &&
+          (xTaskGetTickCount() - last_recovery) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS)) {
+        recoverCAN();
+        last_recovery = xTaskGetTickCount();
       }
     }
     // delay 20ms

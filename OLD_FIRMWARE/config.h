@@ -23,7 +23,13 @@
 
 /// Maximum time (ms) allowed between BMS status messages before isHVSafe() treats
 /// the BMS as offline and forces HV_ERROR. Only enforced after the first message.
-#define CAN_TIMEOUT 2000
+#define CAN_BMS_TIMEOUT_MS 2000
+
+/// Maximum time (ms) allowed with NO CAN traffic of any kind before isHVSafe()
+/// treats the bus as failed (bus-off, transceiver/wiring fault) and forces
+/// HV_ERROR. Only enforced after the first frame has ever been received.
+/// canTask also attempts a rate-limited controller reinstall while silent.
+#define CAN_BUS_TIMEOUT_MS 1000
 
 /// This exists to be changed based on the final number of thermistors
 /// we settle on having in the code later.

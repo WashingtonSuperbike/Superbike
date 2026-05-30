@@ -49,8 +49,8 @@ void dashboard_refresh(const DashboardState &state)
 {
     // Determine charging state with watchdog
     uint32_t now = millis();
-    bool evcc_alive = (now - state.evcc_last_rx_ms < CAN_TIMEOUT_MS);
-    bool charger_alive = (now - state.charger_last_rx_ms < CAN_TIMEOUT_MS);
+    bool evcc_alive = (now - state.evcc_last_rx_ms < CAN_BMS_TIMEOUT_MS_MS);
+    bool charger_alive = (now - state.charger_last_rx_ms < CAN_BMS_TIMEOUT_MS_MS);
 
     // We are "charging" if the EVCC is enabled OR we see current flowing from the charger
     bool is_charging = (evcc_alive && state.evcc.en > 0) || (charger_alive && state.charger.output_current > 0.5f);

@@ -9,7 +9,7 @@
 
 #define CONFIG_LOG_COUNT 7
 
-#define CAN_TIMEOUT_MS 2000
+#define CAN_BMS_TIMEOUT_MS_MS 2000
 
 #define REFRESH_RATE_HZ 30.0f
 
