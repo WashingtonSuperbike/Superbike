@@ -99,6 +99,13 @@ struct DashboardState {
     uint32_t charger_last_rx_ms;
     uint32_t evcc_last_rx_ms;
 
+    // Mainboard status (MAINBOARD_STATUS_IND from the Teensy mainboard).
+    // Atomics: written by the CAN task, read by the dashboard/error task.
+    std::atomic<uint8_t> mb_hv_state{0};      // HV_STATE ordinal (0=OFF..3=ERROR)
+    std::atomic<uint8_t> mb_fault_reason{0};  // MB_FAULT_REASON ordinal
+    std::atomic<uint8_t> mb_precharge_pct{0}; // 0..100 (optional display)
+    uint32_t mb_last_rx_ms;                   // watchdog: last MAINBOARD_STATUS rx
+
     // Error Management
     ErrorList     error_list;
     std::atomic<ErrorSeverity> bms_severity{ErrorSeverity::NONE};

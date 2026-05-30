@@ -22,6 +22,10 @@
 // Transmit/refresh period. The display watchdogs the mainboard against ~3x this.
 #define MB_STATUS_PERIOD_MS   100   // 10 Hz
 
+// If the display sees no MAINBOARD_STATUS frame for this long, it declares the
+// mainboard offline ("MAINBOARD OFFLINE"). 5 missed frames.
+#define MB_OFFLINE_TIMEOUT_MS (5 * MB_STATUS_PERIOD_MS)   // 500 ms
+
 // ============================================================================
 // FRAME LAYOUT  (DLC = 4)
 //   buf[0] hv_state        : HV_STATE ordinal (see below)

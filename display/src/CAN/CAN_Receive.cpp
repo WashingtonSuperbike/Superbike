@@ -1,5 +1,6 @@
 #include "CAN_Receive.h"
 #include "CANDecoder.h"
+#include "MainboardProtocol.h"
 
 // ---------------------------------------------------------------------------
 // Spinlock protecting BatteryVoltages.cell_voltages writes/reads.
@@ -18,6 +19,19 @@ static twai_filter_config_t  s_f_config;
 
 static void handle_rx_message(twai_message_t &message, DashboardState *state)
 {
+    // Mainboard status is a point-to-point display message (the mainboard never
+    // decodes its own status), so it's handled here rather than in the shared
+    // CANDecoder dispatcher. Codes only — update_error_state() maps them to tips.
+    if (message.identifier == MAINBOARD_STATUS_IND) {
+        if (message.data_length_code >= MB_STATUS_DLC) {
+            state->mb_hv_state.store(message.data[MB_STATUS_OFF_HV_STATE]);
+            state->mb_fault_reason.store(message.data[MB_STATUS_OFF_FAULT]);
+            state->mb_precharge_pct.store(message.data[MB_STATUS_OFF_PRECHARGE]);
+            state->mb_last_rx_ms = millis();   // mainboard liveness watchdog
+        }
+        return;
+    }
+
     bool recognized = CANDecoder::dispatch(
         message,
         &state->motor,

@@ -10,6 +10,8 @@
 #include "../lvgl_config/lvgl_v8_port.h"
 #include "../Utils/EMAFilter.h"
 #include "Config.h"
+#include "MainboardProtocol.h"
+#include "Types.h"            // enum HV_STATE
 #include <cstdio>
 #include <cmath>
 
@@ -62,6 +64,25 @@ static void add_error_to_list(ErrorList &list, ErrorSource source, ErrorSeverity
             list.errors[i].is_active = true;
             break;
         }
+    }
+}
+
+// Map a mainboard fault reason (codes on the wire) to a rider-facing tip telling
+// them what to do. Kept <48 chars to fit DashboardError.description.
+static const char* mainboard_tip(uint8_t fault_reason)
+{
+    switch (fault_reason) {
+        case MB_FAULT_BMS_TIMEOUT:       return "BMS COMMS LOST - CHECK BMS, CYCLE HV";
+        case MB_FAULT_BMS_OVERTEMP:      return "PACK OVERTEMP - HV OFF, LET COOL";
+        case MB_FAULT_BMS_VOLTAGE:       return "CELL V OUT OF RANGE - HV OFF, CHARGE";
+        case MB_FAULT_LTC_FAULT:         return "BMS LTC FAULT - CHECK PACK WIRING";
+        case MB_FAULT_LTC_COUNT:         return "BMS LTC COUNT WRONG - CHECK PACK";
+        case MB_FAULT_MC_HV_FAULT:       return "CONTROLLER HV FAULT - HV OFF THEN ON";
+        case MB_FAULT_MOTOR_OVERTEMP:    return "MOTOR OVERTEMP - HV OFF, LET COOL";
+        case MB_FAULT_MC_OVERTEMP:       return "CONTROLLER OVERTEMP - HV OFF, COOL";
+        case MB_FAULT_PRECHARGE_TIMEOUT: return "PRECHARGE FAILED - CHECK PACK, CYCLE HV";
+        case MB_FAULT_CAN_BUS:           return "CAN BUS FAULT - CHECK WIRING, CYCLE HV";
+        default:                         return "MAINBOARD HV ERROR - CYCLE HV SWITCH";
     }
 }
 
@@ -197,8 +218,31 @@ void update_error_state(DashboardState *state)
         if (max_mc < ErrorSeverity::WARN) max_mc = ErrorSeverity::WARN;
     }
 
+    // --- Mainboard (HV state machine on the Teensy) ---
+    ErrorSeverity max_mb = ErrorSeverity::NONE;
+    uint8_t mb_hv     = state->mb_hv_state.load();
+    uint8_t mb_reason = state->mb_fault_reason.load();
+    bool    mb_heard  = (state->mb_last_rx_ms != 0);
+    bool    mb_offline = mb_heard && ((millis() - state->mb_last_rx_ms) > MB_OFFLINE_TIMEOUT_MS);
+
+    if (mb_offline) {
+        // Heartbeat lost: the mainboard stopped transmitting (power/wiring/bus).
+        add_error_to_list(state->error_list, ErrorSource::MAINBOARD, ErrorSeverity::CRIT,
+                          "MAINBOARD OFFLINE - CHECK POWER/WIRING");
+        max_mb = ErrorSeverity::CRIT;
+    } else if (mb_heard && mb_hv == HV_ERROR) {
+        add_error_to_list(state->error_list, ErrorSource::MAINBOARD, ErrorSeverity::CRIT,
+                          mainboard_tip(mb_reason));
+        max_mb = ErrorSeverity::CRIT;
+    } else if (mb_heard && mb_hv == HV_PRECHARGING) {
+        add_error_to_list(state->error_list, ErrorSource::MAINBOARD, ErrorSeverity::INFO,
+                          "HV PRECHARGING...");
+        max_mb = ErrorSeverity::INFO;
+    }
+
     state->bms_severity.store(max_bms);
     state->mc_severity.store(max_mc);
+    state->mb_severity.store(max_mb);
 
     taskEXIT_CRITICAL(&g_error_list_mux);
 }
@@ -701,10 +745,13 @@ void drive_screen_refresh(const DashboardState &state)
     taskEXIT_CRITICAL(&g_error_list_mux);
 
     // -- Critical Error Modal (v1.5) --
-    // Show instantly if any real CRIT error exists from BMS or MC.
-    // Does NOT trigger for CAN timeouts as those do not escalate bms_severity/mc_severity.
+    // Show instantly if any real CRIT error exists from BMS, MC, or the mainboard
+    // (HV_ERROR / MAINBOARD OFFLINE). The modal loop below then surfaces the
+    // matching description (e.g. the mainboard rider tip).
+    // Does NOT trigger for CAN timeouts as those do not escalate the severities.
     bool crit_active = (state.bms_severity.load() == ErrorSeverity::CRIT ||
-                        state.mc_severity.load() == ErrorSeverity::CRIT);
+                        state.mc_severity.load() == ErrorSeverity::CRIT ||
+                        state.mb_severity.load() == ErrorSeverity::CRIT);
 
     if (crit_active) {
         lv_obj_clear_flag(w.error_modal, LV_OBJ_FLAG_HIDDEN);
