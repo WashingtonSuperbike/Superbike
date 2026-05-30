@@ -15,8 +15,8 @@
 
 #pragma once
 
-#define ESP_PANEL_USE_1024_600_LCD           (0)     // 0: 800x480, 1: 1024x600
-#define ESP_OPEN_TOUCH 0 // 1 initiates the touch, 0 closes the touch.
+#define ESP_PANEL_USE_1024_600_LCD (0)  // 0: 800x480, 1: 1024x600
+#define ESP_OPEN_TOUCH 0                // 1 initiates the touch, 0 closes the touch.
 
 // *INDENT-OFF*
 
@@ -35,9 +35,9 @@
  * @brief Board name (format: "Manufacturer:Model")
  */
 #if ESP_PANEL_USE_1024_600_LCD
-    #define ESP_PANEL_BOARD_NAME                "Waveshare:ESP32-S3-Touch-LCD-5B"
+    #define ESP_PANEL_BOARD_NAME "Waveshare:ESP32-S3-Touch-LCD-5B"
 #else
-    #define ESP_PANEL_BOARD_NAME                "Waveshare:ESP32-S3-Touch-LCD-5"
+    #define ESP_PANEL_BOARD_NAME "Waveshare:ESP32-S3-Touch-LCD-5"
 #endif
 
 /**

@@ -65,8 +65,8 @@ void decipherBMSStatus(CAN_message_t msg, BMSStatus *bms_status) {
 static void calculateSeriesVoltage(BatteryVoltages *battery_voltages) {
   float partialSeriesVoltage = 0;
   int current_cell;
-  for (current_cell = 0; current_cell < CONFIG_HV_CELL_COUNT; current_cell++) {
-    partialSeriesVoltage += battery_voltages->hv_cell_voltages[current_cell];
+  for (current_cell = 0; current_cell < CELL_COUNT; current_cell++) {
+    partialSeriesVoltage += battery_voltages->cell_voltages[current_cell];
   }
   battery_voltages->hv_series_voltage = partialSeriesVoltage;
 }
@@ -79,29 +79,31 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   int ltcOffset = (msgID & 0x1);
   totalOffset = (cellOffset * 4) + (ltcOffset * 12);
 
-  if (totalOffset < 0 || totalOffset + 4 > CONFIG_HV_CELL_COUNT)
+  if (totalOffset < 0 || totalOffset + 4 > CELL_COUNT)
     return;
 
   int cellIndex;
 
-  static bool hv_cell_detected[CONFIG_HV_CELL_COUNT];
+  static bool hv_cell_detected[CELL_COUNT];
 
   for (cellIndex = 0; cellIndex < 4; cellIndex++) {
+    // Safe load: memcpy avoids the strict-aliasing/unaligned-read UB of casting
+    // msg.buf to uint16_t*. Field renamed to cell_voltages per display_bringup.
     uint16_t raw;
     memcpy(&raw, &msg.buf[cellIndex * 2], sizeof(raw));
-    battery_voltages->hv_cell_voltages[cellIndex + totalOffset] = ((float)raw) / 10000;
+    battery_voltages->cell_voltages[cellIndex + totalOffset] = ((float)raw) / 10000;
     hv_cell_detected[cellIndex + totalOffset] = true;
   }
   
   calculateSeriesVoltage(battery_voltages);
 
-  if (!battery_voltages->hv_cell_voltages_ready) {
-    for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++ ) {
+  if (!battery_voltages->cell_voltages_ready) {
+    for (int i = 0; i < CELL_COUNT; i++ ) {
       if (!hv_cell_detected[i]) {
         return;
       }
     }
-    battery_voltages->hv_cell_voltages_ready = true;
+    battery_voltages->cell_voltages_ready = true;
   }
 }
 
@@ -119,7 +121,7 @@ void decipherThermistors(CAN_message_t msg, ThermistorTemps *thermistor_temps) {
     // write past temps[]/temps_valid[] into adjacent Context fields (e.g.
     // battery_voltages, which gates HV). Out-of-range thermistor data is dropped.
     int idx = thermistor + 5 * ltcID;
-    if (idx < 0 || idx >= CONFIG_THERMISTOR_COUNT) {
+    if (idx < 0 || idx >= THERMISTOR_COUNT) {
       continue;
     }
     thermistor_temps->temps[idx] = currentThermistor[thermistor];

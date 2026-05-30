@@ -32,6 +32,12 @@ struct Context {
   BatteryVoltages battery_voltages;
   GyroData gyro_data;
   bool sd_started;
+
+  // Watchdog Timestamps (ms)
+  uint32_t motor_last_rx_ms;
+  uint32_t bms_last_rx_ms;
+  uint32_t charger_last_rx_ms;
+  uint32_t evcc_last_rx_ms;
 };
 
 // ============================================================================

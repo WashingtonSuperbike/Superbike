@@ -14,7 +14,7 @@ bool isPrecharged(superbike::PreChargeTaskData preChargeData) {
   MotorStats motor_stats = preChargeData.context->motor_stats;
 
   // Ret false if we haven't received all BMS cell voltages yet
-  if (!(battery_voltages.hv_cell_voltages_ready)) {
+  if (!(battery_voltages.cell_voltages_ready)) {
     return false;
   }
 
