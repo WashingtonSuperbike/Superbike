@@ -24,6 +24,17 @@ void dataLoggingTask(void *dlData) {
   DataLoggingTaskData *dl = (DataLoggingTaskData *)dlData;
   Context *context = dl->context;
   CSVWriter *writers = context->logs;
+
+  // SD init must happen after the scheduler starts — FIFO_SDIO uses FreeRTOS yield internally
+  Serial.print("Starting SD: ");
+  if (startSD()) {
+    Serial.println("SD successfully started");
+    context->sd_started = 1;
+  } else {
+    context->sd_started = 0;
+    Serial.println("Error starting SD card");
+  }
+
   const TickType_t epoch = xTaskGetTickCount();
   TickType_t last_save = xTaskGetTickCount();
   TickType_t now = xTaskGetTickCount();
@@ -53,17 +64,20 @@ void dataLoggingTask(void *dlData) {
 }
 
 bool startSD() {
-  /// startSD() attempts to begin communication with the SD card on SPI (SDIO)
-  ///Returns true if no errors exist, returns false if an error exists
-  return sd.begin(SdioConfig(FIFO_SDIO));
+  // Raise priority to prevent preemption during SDIO hardware init.
+  // FIFO_SDIO init programs the SDHC peripheral state machine — a context
+  // switch mid-init corrupts it and produces a bus fault on the next access.
+  vTaskPrioritySet(NULL, configMAX_PRIORITIES - 1);
+  bool r = sd.begin(SdioConfig(FIFO_SDIO));
+  vTaskPrioritySet(NULL, 2);  // restore DATA LOGGING TASK priority
+  return r;
 }
 
 bool openFile(CSVWriter *writer) {
-  /// openFile() attemps to open the file designated at the filename inside CSVWriter
-  /// Returns true if no errors, returns false if any error exists
-  writer->open = writer->file.open(writer->filename, O_RDWR | O_CREAT | O_TRUNC);
+  writer->file = sd.open(writer->filename, O_RDWR | O_CREAT | O_TRUNC);
+  writer->open = (bool)writer->file;
   if (!writer->open) {
-    Serial.printf("ERROR: Failed to open file %s\n", writer->filename); 
+    Serial.printf("ERROR: Failed to open file %s\n", writer->filename);
   }
   return writer->open;
 }
@@ -97,44 +111,20 @@ void printFile(CSVWriter *writer) {
 }
 
 void addRecord(CSVWriter *writer, int sTime) {
-
-/// addRecord() adds a record to the data log with the included time in seconds since the
-/// recording has started. The data comes from the dataIn member (shared variable to
-/// other tasks) As of now it converts everything into a String and then prints it to the
-/// file.
-
   if (!writer->open) {
-    openFile(writer);
-  }
-
-  /// The function kinda works but should be redone later to use (void *) datatype instead of (float *). Then cast the (void *) to whatever datatype is given by D_TYPE
-  /// Example: to print an int you would do
-  /*
-   *  void *point = writer->dataValues;
-   * for(int i = 0; i < writer->dataValuesLen) {
-   *    switch(writer->D_TYPE) {
-   *    case FLOAT:
-            sRecord.concat(",").concat(writer->dataValues[i]);
-            point += sizeof(float); // how much space the float took in memory
-            break;
-          case INT:
-            sRecord.concat(",").concat(writer->dataValues[i]);
-            point += sizeof(int); // how much space the int took in memory
-          case ... (can be any other D_TYPE we define)
-            ... (similar to previous two cases)
-            break;
-          default: Serial.printf("Unknown D_TYPE: %u\n", D_TYPE); break;
-        }
-      }
-  */
-
-  String sRecord = String(sTime);
-  for (int i = 0; i < writer->dataValuesLen; i++) {
-    if (writer->D_TYPE == FLOAT) {
-      sRecord.concat(",").concat(writer->dataValues[i]);
-    } else if (writer->D_TYPE == INT) {
-      sRecord.concat(",").concat(int(writer->dataValues[i]));
+    if (!openFile(writer)) {
+      return;
     }
   }
-  writer->file.println(sRecord);
+
+  writer->file.print(sTime);
+  for (int i = 0; i < writer->dataValuesLen; i++) {
+    writer->file.print(',');
+    if (writer->D_TYPE == FLOAT) {
+      writer->file.print(writer->dataValues[i]);
+    } else {
+      writer->file.print((int)writer->dataValues[i]);
+    }
+  }
+  writer->file.println();
 }

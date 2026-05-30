@@ -36,16 +36,6 @@ void setup() {
   /* on brand new board, run File->Examples->Time->TimeTeensy3 and open the serial port. That will set the internal time to the real world clock */
   setTime(Teensy3Clock.get());
 
-  /// Then this method starts the SD Card and prints the status if that works.
-  Serial.print("Starting SD: ");
-  if (startSD()) {
-    Serial.println("SD successfully started");
-    context->sd_started = 1;
-  } else {
-    context->sd_started = 0;
-    Serial.println("Error starting SD card");
-  }
-
   initDisplay(context);
 
   initCAN();
@@ -79,14 +69,23 @@ void setup() {
   Serial.println("Insufficient RAM");
 }
 
+static void initWriter(CSVWriter *w, const char *filename, int len, float *data, data_type dtype) {
+  w->filename     = filename;
+  w->dataValuesLen = len;
+  w->dataValues   = data;
+  w->D_TYPE       = dtype;
+  w->open         = false;
+  // w->file is default-constructed in-place; do not copy-assign SdFile objects
+}
+
 void initializeLogStructs() {
-  context->logs[0] = {MOTOR_TEMPERATURE_LOG, 1, &(context->motor_temps.motor_temperature), FLOAT};
-  context->logs[1] = {MOTOR_CONTROLLER_TEMPERATURE_LOG, 1, &(context->motor_temps.motor_controller_temperature), FLOAT};
-  context->logs[2] = {MOTOR_CONTROLLER_VOLTAGE_LOG, 1, &(context->motor_stats.motor_controller_battery_voltage), FLOAT};
-  context->logs[3] = {MOTOR_CURRENT_LOG, 1, &(context->motor_stats.motor_current), FLOAT};
-  context->logs[4] = {RPM_LOG, 1, &(context->motor_stats.RPM), FLOAT};
-  context->logs[5] = {THERMISTOR_LOG, 10, context->thermistor_temps.temps, FLOAT};
-  context->logs[6] = {BMS_VOLTAGE_LOG, 1, &(context->battery_voltages.hv_series_voltage), FLOAT};
+  initWriter(&context->logs[0], MOTOR_TEMPERATURE_LOG,           1,  &(context->motor_temps.motor_temperature),              FLOAT);
+  initWriter(&context->logs[1], MOTOR_CONTROLLER_TEMPERATURE_LOG, 1, &(context->motor_temps.motor_controller_temperature),   FLOAT);
+  initWriter(&context->logs[2], MOTOR_CONTROLLER_VOLTAGE_LOG,    1,  &(context->motor_stats.motor_controller_battery_voltage), FLOAT);
+  initWriter(&context->logs[3], MOTOR_CURRENT_LOG,               1,  &(context->motor_stats.motor_current),                  FLOAT);
+  initWriter(&context->logs[4], RPM_LOG,                         1,  &(context->motor_stats.RPM),                             FLOAT);
+  initWriter(&context->logs[5], THERMISTOR_LOG,                  10, context->thermistor_temps.temps,                        FLOAT);
+  initWriter(&context->logs[6], BMS_VOLTAGE_LOG,                 1,  &(context->battery_voltages.hv_series_voltage),         FLOAT);
 }
 
 time_t getTeensy3Time()

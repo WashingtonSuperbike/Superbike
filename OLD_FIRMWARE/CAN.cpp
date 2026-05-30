@@ -81,6 +81,10 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   int cellOffset = (((msgID >> 8) & 0xF) - 0x9);
   int ltcOffset = (msgID & 0x1);
   totalOffset = (cellOffset * 4) + (ltcOffset * 12);
+
+  if (totalOffset < 0 || totalOffset + 4 > CONFIG_HV_CELL_COUNT)
+    return;
+
   int cellIndex;
 
   static bool hv_cell_detected[CONFIG_HV_CELL_COUNT];
@@ -146,6 +150,7 @@ static void checkCAN(CANTaskData canData) {
         break;
       case CHARGER_STATS:
         decipherChargerStats(CAN_msg, &(context->charger_stats));
+        break;
       case BMSC1_LTC1_CELLS_04:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
         break;
@@ -202,7 +207,7 @@ void printBMSStatus(BMSStatus bms_status) {
   if (bms_status.ltc_fault == 1) {
     Serial.printf("LTC fault detected\n");
   }
-  Serial.printf("%d LTCs detected\n");
+  // Serial.printf("%d LTCs detected\n");
 }
 
 void requestCellVoltages() {
