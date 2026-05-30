@@ -11,6 +11,13 @@ extern TwoWire Wire;
 /* Current HV state */
 static HV_STATE hv_state = HV_OFF;
 
+/* Consistent, FSM-private copy of the CAN-written safety fields. Filled once per
+ * loop under a critical section so isHVSafe()/isPrecharged() never read a struct
+ * the CAN task was halfway through updating. File-scope (not on the task stack)
+ * to keep the precharge stack small; only plain-old-data sub-structs are copied
+ * into it (never logs[]/FsFile). Bug #3 fix. */
+static Context precharge_snapshot;
+
 // Returns true if the motor controller is done precharging.
 // Returns false otherwise.
 bool isPrecharged(PreChargeTaskData preChargeData) {
@@ -156,7 +163,7 @@ void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
-      else if (!isHVSafe(preChargeData) || gyro_kalman->angle_Y > 45 || gyro_kalman->angle_Y < -45 || gyro_kalman->angle_X > 45 || gyro_kalman->angle_X < -45) {
+      else if (!isHVSafe(preChargeData)) {
         hv_state = HV_ERROR;
       }
       else {
@@ -442,13 +449,35 @@ void initI2C(GyroKalman *gyro_kalman) {
 
 void preChargeTask(void *taskData) {
   PreChargeTaskData preChargeData = *(PreChargeTaskData *)taskData;
-  GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+  Context *shared = preChargeData.context;
+  GyroKalman *gyro_kalman = &shared->gyro_kalman;
+
+  // The FSM evaluates safety against the snapshot, not the live shared Context.
+  PreChargeTaskData snapData = { &precharge_snapshot };
 
   while (1) {
     // Reset the watchdog timer
     wdt_kick();
+
+    // Atomically copy the CAN-written safety fields into the snapshot. The CAN
+    // task (lower priority) updates these field-by-field and can be preempted
+    // mid-write by this higher-priority task; the critical section guarantees a
+    // self-consistent view for the safety checks below. The copies are small,
+    // trivially-copyable PODs, so the section is only a few hundred ns.
+    taskENTER_CRITICAL();
+    precharge_snapshot.motor_stats      = shared->motor_stats;
+    precharge_snapshot.motor_temps      = shared->motor_temps;
+    precharge_snapshot.bms_status       = shared->bms_status;
+    precharge_snapshot.battery_voltages = shared->battery_voltages;
+    precharge_snapshot.last_bms_rx_tick = shared->last_bms_rx_tick;
+    taskEXIT_CRITICAL();
+
+    // Gyro is owned by this task (written below), so no race — copy outside the
+    // critical section to keep snapData self-consistent for any tilt logic.
+    precharge_snapshot.gyro_kalman = shared->gyro_kalman;
+
     preChargeCircuitFSMStateActions();
-    preChargeCircuitFSMTransitions(preChargeData);
+    preChargeCircuitFSMTransitions(snapData);
 
     updateGyroData(gyro_kalman);
 

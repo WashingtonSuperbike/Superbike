@@ -114,8 +114,16 @@ void decipherThermistors(CAN_message_t msg, ThermistorTemps *thermistor_temps) {
   byte *currentThermistor = &msg.buf[3];
   int thermistor;
   for (thermistor = 0; thermistor < 5; thermistor++) {
-    thermistor_temps->temps[thermistor + 5 * ltcID] = currentThermistor[thermistor];
-    thermistor_temps->temps_valid[thermistor + 5 * ltcID] = true;
+    // ltcID comes straight off the CAN bus (0-255) and is untrusted. Bound the
+    // destination index to the array so a malformed/unexpected frame can never
+    // write past temps[]/temps_valid[] into adjacent Context fields (e.g.
+    // battery_voltages, which gates HV). Out-of-range thermistor data is dropped.
+    int idx = thermistor + 5 * ltcID;
+    if (idx < 0 || idx >= CONFIG_THERMISTOR_COUNT) {
+      continue;
+    }
+    thermistor_temps->temps[idx] = currentThermistor[thermistor];
+    thermistor_temps->temps_valid[idx] = true;
   }
 }
 
