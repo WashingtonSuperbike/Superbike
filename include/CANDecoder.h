@@ -176,6 +176,13 @@ static inline void decipherCellsVoltage(twai_message_t msg, BatteryVoltages *bat
              if (battery) decipherCellsVoltage(msg, battery, cell_mux);
              if (bms_last_rx) *bms_last_rx = now;
              return true;
+         case (BMSC1_LTC1_REQUEST_CELLS >> 8):
+             // Mainboard->BMS "request cell voltages" poll (covers both LTC1
+             // 0x01de0800 and LTC2 0x01de0801 — same PGN). Nothing for the
+             // display to decode; recognize it so it isn't logged as unknown.
+             // Not a BMS liveness signal (it's the mainboard transmitting), so
+             // don't touch bms_last_rx.
+             return true;
          default:
              return false;
      }

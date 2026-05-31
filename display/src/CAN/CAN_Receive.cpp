@@ -60,7 +60,16 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
 
 bool waveshare_twai_init()
 {
-    s_g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)TX_PIN, (gpio_num_t)RX_PIN, TWAI_MODE_LISTEN_ONLY);
+    // NORMAL (not LISTEN_ONLY): the display must acknowledge frames. CAN requires
+    // a node other than the transmitter to ACK; with only the mainboard + display
+    // on the bus, a listen-only display never ACKs, so the mainboard's frames go
+    // unacknowledged and are retransmitted endlessly — an ACK-error storm that
+    // floods the RX queue and starves real status frames. ACKing also makes the
+    // display robust on a sparse bus rather than relying on other nodes to ACK.
+    s_g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)TX_PIN, (gpio_num_t)RX_PIN, TWAI_MODE_NORMAL);
+    // Deepen the RX queue (default 5) so short bursts don't overflow and drop the
+    // newest status frame while the receive task is between polls.
+    s_g_config.rx_queue_len = 32;
     s_t_config = TWAI_TIMING_CONFIG_250KBITS();
     s_f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
