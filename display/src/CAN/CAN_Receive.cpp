@@ -23,14 +23,6 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
     // decodes its own status), so it's handled here rather than in the shared
     // CANDecoder dispatcher. Codes only — update_error_state() maps them to tips.
     if (message.identifier == MAINBOARD_STATUS_IND) {
-        // TEMP DEBUG (HV-state investigation): log every mainboard status frame
-        // exactly as received — DLC + raw bytes + what we store into mb_hv_state.
-        // Remove once the HV-state pipeline is confirmed end-to-end.
-        Serial.printf("MB_STATUS rx: dlc=%u buf=[%u %u %u %u] -> hv_state=%u\n",
-                      message.data_length_code,
-                      message.data[0], message.data[1],
-                      message.data[2], message.data[3],
-                      message.data[MB_STATUS_OFF_HV_STATE]);
         if (message.data_length_code >= MB_STATUS_DLC) {
             state->mb_hv_state.store(message.data[MB_STATUS_OFF_HV_STATE]);
             state->mb_fault_reason.store(message.data[MB_STATUS_OFF_FAULT]);
@@ -68,7 +60,16 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
 
 bool waveshare_twai_init()
 {
-    s_g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)TX_PIN, (gpio_num_t)RX_PIN, TWAI_MODE_LISTEN_ONLY);
+    // NORMAL (not LISTEN_ONLY): the display must acknowledge frames. CAN requires
+    // a node other than the transmitter to ACK; with only the mainboard + display
+    // on the bus, a listen-only display never ACKs, so the mainboard's frames go
+    // unacknowledged and are retransmitted endlessly — an ACK-error storm that
+    // floods the RX queue and starves real status frames. ACKing also makes the
+    // display robust on a sparse bus rather than relying on other nodes to ACK.
+    s_g_config = TWAI_GENERAL_CONFIG_DEFAULT((gpio_num_t)TX_PIN, (gpio_num_t)RX_PIN, TWAI_MODE_NORMAL);
+    // Deepen the RX queue (default 5) so short bursts don't overflow and drop the
+    // newest status frame while the receive task is between polls.
+    s_g_config.rx_queue_len = 32;
     s_t_config = TWAI_TIMING_CONFIG_250KBITS();
     s_f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
