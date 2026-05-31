@@ -1,12 +1,15 @@
 # Folders
 
-**/.vscode/**
-**/.pio/**
-**/.planning/**
-**/.claude/**
+**/.vscode
+**/.pio
+**/.planning
+**/.claude
+**/.swarm
 hidden/
 
+
 # Files
+*.db
 
 # Images
 *.png
