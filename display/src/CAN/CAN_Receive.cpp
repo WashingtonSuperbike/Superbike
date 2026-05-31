@@ -23,6 +23,14 @@ static void handle_rx_message(twai_message_t &message, DashboardState *state)
     // decodes its own status), so it's handled here rather than in the shared
     // CANDecoder dispatcher. Codes only — update_error_state() maps them to tips.
     if (message.identifier == MAINBOARD_STATUS_IND) {
+        // TEMP DEBUG (HV-state investigation): log every mainboard status frame
+        // exactly as received — DLC + raw bytes + what we store into mb_hv_state.
+        // Remove once the HV-state pipeline is confirmed end-to-end.
+        Serial.printf("MB_STATUS rx: dlc=%u buf=[%u %u %u %u] -> hv_state=%u\n",
+                      message.data_length_code,
+                      message.data[0], message.data[1],
+                      message.data[2], message.data[3],
+                      message.data[MB_STATUS_OFF_HV_STATE]);
         if (message.data_length_code >= MB_STATUS_DLC) {
             state->mb_hv_state.store(message.data[MB_STATUS_OFF_HV_STATE]);
             state->mb_fault_reason.store(message.data[MB_STATUS_OFF_FAULT]);

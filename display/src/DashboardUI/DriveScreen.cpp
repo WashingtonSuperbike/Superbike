@@ -42,6 +42,7 @@ static int     prev_mc_mv         = -1; // (int)(mc_voltage * 10)
 static int     prev_batt_pct      = -1;
 static bool    prev_sd_started    = false;
 static CanStatus prev_can_status  = CanStatus::BOOT;
+static int       prev_hv_state    = -1;  // last rendered HV_STATE ordinal, -2 == UNKNOWN
 
 // Spinlock protecting DashboardState.error_list
 portMUX_TYPE g_error_list_mux = portMUX_INITIALIZER_UNLOCKED;
@@ -399,6 +400,11 @@ void drive_screen_build(lv_obj_t *scr)
     w.bms_status_label  = create_icon_label(scr, LV_SYMBOL_CHARGE,   CLR_STATUS_GREEN, 90,  icon_y);
     w.mc_status_icon    = create_icon_label(scr, LV_SYMBOL_SETTINGS, CLR_STATUS_GREEN, 120, icon_y);
 
+    // HV state text (between MC status icon and the centered logo).
+    // Boots to gray "HV UNKNOWN"; recolored/retitled in refresh from mb_hv_state.
+    w.hv_state_label = create_icon_label(scr, "HV UNKNOWN", CLR_DISABLED, 190, icon_y,
+                                         &lv_font_montserrat_18);
+
     // Superbike logo (center bottom)
     w.logo_icon = lv_img_create(scr);
     lv_img_set_src(w.logo_icon, &logo55);
@@ -699,6 +705,34 @@ void drive_screen_refresh(const DashboardState &state)
     };
     lv_obj_set_style_text_color(w.bms_status_label, get_source_color(state.bms_severity.load(), state.bms_last_rx_ms), 0);
     lv_obj_set_style_text_color(w.mc_status_icon,   get_source_color(state.mc_severity.load(),  state.motor_last_rx_ms), 0);
+
+    // -- HV state text (mainboard HV state) --
+    // No-data before first frame, and offline if the heartbeat is stale.
+    // -2 represents the UNKNOWN/offline render so it dirty-checks
+    // distinctly from the four real HV_STATE ordinals (0..3).
+    uint8_t hv_raw    = state.mb_hv_state.load();
+    bool    hv_heard  = (state.mb_last_rx_ms != 0);
+    bool    hv_online = hv_heard && ((millis() - state.mb_last_rx_ms) <= MB_OFFLINE_TIMEOUT_MS);
+    int     hv_render = hv_online ? (int)hv_raw : -2;
+    if (hv_render != prev_hv_state) {
+        const char *hv_text;
+        lv_color_t  hv_color;
+        if (!hv_online) {
+            hv_text  = "HV UNKNOWN";
+            hv_color = CLR_DISABLED;
+        } else {
+            switch (hv_raw) {
+                case HV_PRECHARGING: hv_text = "PRECHARGING"; hv_color = CLR_WARN_YELLOW;  break;
+                case HV_ON:          hv_text = "HV ACTIVE";   hv_color = CLR_STATUS_GREEN; break;
+                case HV_ERROR:       hv_text = "HV ERROR";    hv_color = CLR_WARN_RED;     break;
+                case HV_OFF:
+                default:             hv_text = "HV OFF";      hv_color = CLR_DISABLED;     break;
+            }
+        }
+        lv_label_set_text(w.hv_state_label, hv_text);
+        lv_obj_set_style_text_color(w.hv_state_label, hv_color, 0);
+        prev_hv_state = hv_render;
+    }
 
     // -- Warning Carousel --
     static int carousel_idx = 0;

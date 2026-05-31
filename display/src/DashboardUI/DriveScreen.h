@@ -50,6 +50,7 @@ struct DriveWidgets {
     lv_obj_t *can_icon;
     lv_obj_t *bms_status_label;
     lv_obj_t *mc_status_icon;
+    lv_obj_t *hv_state_label;   // HV state text (between MC icon and logo)
 
     // Superbike logo (bottom middle)
     lv_obj_t *logo_icon;
