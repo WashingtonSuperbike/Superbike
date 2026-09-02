@@ -37,6 +37,8 @@ void setup() {
   
   initGPIO();
 
+  imd_init();
+  
   Serial.begin(115200);
 
   initializeLogStructs();

@@ -27,6 +27,19 @@ static volatile uint8_t mb_precharge_pct = 0;
  * into it (never logs[]/FsFile). Bug #3 fix. */
 static Context precharge_snapshot;
 
+/* Raw IMD MHS edge capture. Written only by mhsISR(); read only by
+ * imd_check(), called from isHVSafe(). Not part of Context - the IMD is two
+ * local GPIO/PWM pins, not CAN-sourced data. */
+static IMD_RawCapture imd_raw = {0};
+
+/* Debounced OKHS state - mirrors debounced_HV_toggle()'s pattern. Written by
+ * debounced_okhs(), sampled once per precharge loop. Defaults to "ok" so an
+ * unconfigured/not-yet-sampled state doesn't spuriously fault before first read. */
+static bool imd_okhs_ok = true;
+
+/* Last computed fault status, exposed via get_imd_ok(). */
+static bool imd_currently_ok = true;
+
 // Returns true if the motor controller is done precharging.
 // Returns false otherwise.
 bool isPrecharged(PreChargeTaskData preChargeData) {
@@ -63,6 +76,15 @@ bool isHVSafe(PreChargeTaskData preChargeData) {
   if (last_can != 0 && (xTaskGetTickCount() - last_can) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS)) {
     hv_fault_reason = MB_FAULT_CAN_BUS;
     Serial.println("HV unsafe: CAN bus silent (possible bus-off)");
+    return 0;
+  }
+
+  MB_FAULT_REASON imd_reason;
+  bool imd_faulted = imd_check(&imd_reason);
+  imd_currently_ok = !imd_faulted;
+  if (imd_faulted) {
+    hv_fault_reason = imd_reason;
+    Serial.printf("HV unsafe: IMD fault (reason %d)\n", imd_reason);
     return 0;
   }
 
@@ -181,6 +203,7 @@ void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
   GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
   static TickType_t precharge_start_tick = 0;
   bool hv_on = debounced_HV_toggle();
+  imd_okhs_ok = debounced_okhs();
   switch (hv_state) { // transitions
     case HV_OFF:
       if (hv_on) {
@@ -350,6 +373,99 @@ void updateGyroData(GyroKalman *gyro_kalman) {
   gyro_kalman->KalmanUncertaintyAnglePitch = gyro_kalman->Kalman1DOutput[1];
 }
 
+/* ISR for MHS pin CHANGE. Keep minimal: timestamp and store, nothing
+ * else. All decoding happens later in imd_check(), on the precharge task's
+ * own timeline, never inside the ISR. Keeps interrupt as short as possible */
+static void mhsISR() {
+  uint32_t now = micros();
+  if (digitalReadFast(IMD_MHS_PIN) == HIGH) {
+    imd_raw.period_us = now - imd_raw.last_rise_us;
+    imd_raw.last_rise_us = now;
+  } else {
+    imd_raw.pulse_width_us = now - imd_raw.last_rise_us;
+  }
+  imd_raw.last_edge_tick = xTaskGetTickCountFromISR();
+}
+
+/* Debounces OKHS the same way debounced_HV_toggle() debounces the HV switch:
+ * requires 3 consecutive stable reads (30ms at 10ms task rate) before
+ * accepting a state change. */
+static bool debounced_okhs() {
+  static uint8_t count = 0;
+  static bool confirmed = true;  // matches imd_okhs_ok's fail-open-until-sampled default
+  bool raw = digitalReadFast(IMD_OKHS_PIN);
+  if (raw != confirmed) {
+    if (++count >= 3) {
+      confirmed = raw;
+      count = 0;
+    }
+  } else {
+    count = 0;
+  }
+  return confirmed;
+}
+
+/* Classifies current IMD state into a fault reason, cross-checking OKHS
+ * against the MHS frequency/duty decode (redundant signals per datasheet -
+ * see design discussion). Returns true (and writes *reason_out) if unsafe;
+ * false if the IMD confirms normal operation on both signals. */
+static bool imd_check(MB_FAULT_REASON *reason_out) {
+  uint32_t now_tick = xTaskGetTickCount();
+
+  // Staleness: no MHS edge recently -> IMD unavailable regardless of OKHS.
+  if (imd_raw.period_us == 0 ||
+      (now_tick - imd_raw.last_edge_tick) > pdMS_TO_TICKS(IMD_STALE_TIMEOUT_MS)) {
+    *reason_out = MB_FAULT_IMD_TIMEOUT;
+    return true;
+  }
+
+  float freq_hz = 1000000.0f / (float)imd_raw.period_us;
+  float dc_meas = (float)imd_raw.pulse_width_us / (float)imd_raw.period_us * 100.0f;
+
+  bool freq_is_fault_band =
+      (freq_hz >= IMD_FREQ_20HZ_MIN && freq_hz <= IMD_FREQ_20HZ_MAX) ||
+      (freq_hz >= IMD_FREQ_40HZ_MIN && freq_hz <= IMD_FREQ_40HZ_MAX) ||
+      (freq_hz >= IMD_FREQ_50HZ_MIN && freq_hz <= IMD_FREQ_50HZ_MAX);
+
+  // At 10 Hz (normal), resistance can still breach the response threshold
+  // via duty cycle even though the frequency band itself says "normal".
+  bool insulation_low = false;
+  if (freq_hz >= IMD_FREQ_10HZ_MIN && freq_hz <= IMD_FREQ_10HZ_MAX) {
+    float r_f_kohm = (dc_meas - 5.0f) / 90.0f * 1200.0f;
+    insulation_low = (r_f_kohm <= IMD_RESPONSE_VALUE_KOHM);
+  }
+
+  bool mhs_says_fault = freq_is_fault_band || insulation_low;
+
+  if (imd_okhs_ok == mhs_says_fault) {
+    // Disagreement between OKHS and MHS decode. Treat conservatively as
+    // unsafe - this should not happen in normal operation; if it fires,
+    // investigate wiring/decode logic rather than trusting either signal.
+    Serial.printf("IMD mismatch: OKHS_ok=%d freq=%.1fHz dc=%.1f%%\n",
+                  imd_okhs_ok, freq_hz, dc_meas);
+    *reason_out = MB_FAULT_IMD_MISMATCH;
+    return true;
+  }
+
+  if (!imd_okhs_ok) {
+    // Both agree: real fault. Classify by frequency band.
+    if (freq_hz >= IMD_FREQ_50HZ_MIN && freq_hz <= IMD_FREQ_50HZ_MAX) {
+      *reason_out = MB_FAULT_IMD_EARTH;
+    } else if (freq_hz >= IMD_FREQ_40HZ_MIN && freq_hz <= IMD_FREQ_40HZ_MAX) {
+      *reason_out = MB_FAULT_IMD_DEVICE;
+    } else if (freq_hz >= IMD_FREQ_20HZ_MIN && freq_hz <= IMD_FREQ_20HZ_MAX) {
+      *reason_out = MB_FAULT_IMD_UNDERVOLTAGE;
+    } else {
+      *reason_out = MB_FAULT_IMD_INSULATION;
+    }
+    return true;
+  }
+
+  return false;  // both agree: no fault
+}
+
+bool get_imd_ok() { return imd_currently_ok; }
+
 void initI2C(GyroKalman *gyro_kalman) {
   // Initialize all variables to 0
   gyro_kalman->angle_X = 0.0;
@@ -495,6 +611,12 @@ void initI2C(GyroKalman *gyro_kalman) {
   gyro_kalman->RateCalibrationPitch /= 2000;
   gyro_kalman->RateCalibrationYaw /= 2000;
   //  *preChargeData.LoopTimer = micros();
+}
+
+void imd_init() {
+  pinMode(IMD_OKHS_PIN, INPUT);
+  pinMode(IMD_MHS_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(IMD_MHS_PIN), mhsISR, CHANGE);
 }
 
 void preChargeTask(void *taskData) {
