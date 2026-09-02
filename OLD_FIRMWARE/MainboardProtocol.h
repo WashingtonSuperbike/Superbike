@@ -57,4 +57,10 @@ enum MB_FAULT_REASON {
     MB_FAULT_MC_OVERTEMP       = 8,  // motor controller over temperature
     MB_FAULT_PRECHARGE_TIMEOUT = 9,  // precharge did not complete within timeout
     MB_FAULT_CAN_BUS           = 10, // CAN bus silent / bus-off (loss of bus)
+    MB_FAULT_IMD_INSULATION    = 11, // IMD: insulation resistance below response threshold (OKHS low, MHS 10/20 Hz)
+    MB_FAULT_IMD_EARTH         = 12, // IMD: earth/Kl.31 connection fault (MHS 50 Hz)
+    MB_FAULT_IMD_DEVICE        = 13, // IMD: internal device error (MHS 40 Hz)
+    MB_FAULT_IMD_UNDERVOLTAGE  = 14, // IMD: undervoltage condition detected (MHS 20 Hz)
+    MB_FAULT_IMD_TIMEOUT       = 15, // IMD: no valid OKHS/MHS activity within expected window (IMD unpowered/disconnected/stale)
+    MB_FAULT_IMD_MISMATCH      = 16, // IMD: OKHS and MHS decode disagree - treat as unsafe
 };

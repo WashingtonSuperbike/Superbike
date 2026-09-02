@@ -6,6 +6,10 @@
 /// Teensy pin for starting precharge, exit precharging, exit done-precharging
 #define HIGH_VOLTAGE_TOGGLE 24
 
+// IMD (ISOMETER IR155-3204) pins
+#define IMD_OKHS_PIN   <pin_number>   // status output, high-side - digital in
+#define IMD_MHS_PIN    <pin_number>   // measurement output, high-side PWM - must support attachInterrupt
+
 #define CAN_RX 0
 #define CAN_TX 1
 
