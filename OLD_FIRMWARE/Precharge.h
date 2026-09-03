@@ -7,6 +7,7 @@
 #include <Wire.h>
 #include "arduino_freertos.h"
 #include "avr/pgmspace.h"
+using namespace arduino;
 
 #define PRECHARGE_TASK_STACK_SIZE configMINIMAL_STACK_SIZE + 2000
 

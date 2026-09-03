@@ -40,6 +40,9 @@ static bool imd_okhs_ok = true;
 /* Last computed fault status, exposed via get_imd_ok(). */
 static bool imd_currently_ok = true;
 
+static bool imd_check(MB_FAULT_REASON *reason_out);
+static bool debounced_okhs();
+
 // Returns true if the motor controller is done precharging.
 // Returns false otherwise.
 bool isPrecharged(PreChargeTaskData preChargeData) {
