@@ -5,12 +5,10 @@
 #include "CAN.h"
 #include "arduino_freertos.h"
 #include "avr/pgmspace.h"
+#include "MainboardProtocol.h"
 
-// Bring Arduino constants from arduino:: namespace to global namespace
-// for compatibility with FlexCAN_T4 library
+// FlexCAN_T4 uses HEX and constrain directly; bridge both from the arduino:: namespace
 using arduino::HEX;
-
-// Define constrain function for FlexCAN_T4 library compatibility
 #ifndef constrain
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 #endif
@@ -57,7 +55,7 @@ void decodeMotorTemps(CAN_message_t msg, MotorTemps *motor_temps) {
 }
 
 void decipherBMSStatus(CAN_message_t msg, BMSStatus *bms_status) {
-  bms_status->bms_status_flag = (float)(msg.buf[0]);
+  bms_status->bms_status_flag = msg.buf[0];
   bms_status->bms_c_id = msg.buf[1];
   bms_status->bms_c_fault = msg.buf[2];
   bms_status->ltc_fault = msg.buf[3];
@@ -68,8 +66,8 @@ void decipherBMSStatus(CAN_message_t msg, BMSStatus *bms_status) {
 static void calculateSeriesVoltage(BatteryVoltages *battery_voltages) {
   float partialSeriesVoltage = 0;
   int current_cell;
-  for (current_cell = 0; current_cell < CONFIG_HV_CELL_COUNT; current_cell++) {
-    partialSeriesVoltage += battery_voltages->hv_cell_voltages[current_cell];
+  for (current_cell = 0; current_cell < CELL_COUNT; current_cell++) {
+    partialSeriesVoltage += battery_voltages->cell_voltages[current_cell];
   }
   battery_voltages->hv_series_voltage = partialSeriesVoltage;
 }
@@ -81,25 +79,32 @@ void decipherCellsVoltage(CAN_message_t msg, BatteryVoltages *battery_voltages) 
   int cellOffset = (((msgID >> 8) & 0xF) - 0x9);
   int ltcOffset = (msgID & 0x1);
   totalOffset = (cellOffset * 4) + (ltcOffset * 12);
+
+  if (totalOffset < 0 || totalOffset + 4 > CELL_COUNT)
+    return;
+
   int cellIndex;
 
-  static bool hv_cell_detected[CONFIG_HV_CELL_COUNT];
+  static bool hv_cell_detected[CELL_COUNT];
 
   for (cellIndex = 0; cellIndex < 4; cellIndex++) {
-    uint16_t *buf = (uint16_t *)msg.buf;
-    battery_voltages->hv_cell_voltages[cellIndex + totalOffset] = ((float)buf[cellIndex]) / 10000;
+    // Safe load: memcpy avoids the strict-aliasing/unaligned-read UB of casting
+    // msg.buf to uint16_t*. Field renamed to cell_voltages per display_bringup.
+    uint16_t raw;
+    memcpy(&raw, &msg.buf[cellIndex * 2], sizeof(raw));
+    battery_voltages->cell_voltages[cellIndex + totalOffset] = ((float)raw) / 10000;
     hv_cell_detected[cellIndex + totalOffset] = true;
   }
   
   calculateSeriesVoltage(battery_voltages);
 
-  if (!battery_voltages->hv_cell_voltages_ready) {
-    for (int i = 0; i < CONFIG_HV_CELL_COUNT; i++ ) {
+  if (!battery_voltages->cell_voltages_ready) {
+    for (int i = 0; i < CELL_COUNT; i++ ) {
       if (!hv_cell_detected[i]) {
         return;
       }
     }
-    battery_voltages->hv_cell_voltages_ready = true;
+    battery_voltages->cell_voltages_ready = true;
   }
 }
 
@@ -112,8 +117,16 @@ void decipherThermistors(CAN_message_t msg, ThermistorTemps *thermistor_temps) {
   byte *currentThermistor = &msg.buf[3];
   int thermistor;
   for (thermistor = 0; thermistor < 5; thermistor++) {
-    thermistor_temps->temps[thermistor + 5 * ltcID] = currentThermistor[thermistor];
-    thermistor_temps->temps_valid[thermistor + 5 + ltcID] = true;
+    // ltcID comes straight off the CAN bus (0-255) and is untrusted. Bound the
+    // destination index to the array so a malformed/unexpected frame can never
+    // write past temps[]/temps_valid[] into adjacent Context fields (e.g.
+    // battery_voltages, which gates HV). Out-of-range thermistor data is dropped.
+    int idx = thermistor + 5 * ltcID;
+    if (idx < 0 || idx >= THERMISTOR_COUNT) {
+      continue;
+    }
+    thermistor_temps->temps[idx] = currentThermistor[thermistor];
+    thermistor_temps->temps_valid[idx] = true;
   }
 }
 
@@ -130,7 +143,10 @@ void printMessage(CAN_message_t msg) {
 static void checkCAN(CANTaskData canData) {
   Context *context = canData.bike_context;
   if (CAN_bus.read(CAN_msg)) { // if we read non-zero # of bytes
-    Serial.printf("Received CAN Message with id %x, buffer[0] = %x\n", CAN_msg.id, CAN_msg.buf[0]);
+    // Any frame is proof the bus is alive — feed the CAN-liveness watchdog
+    // (CAN-1.1 in isHVSafe) and the recovery logic in canTask.
+    context->last_can_rx_tick = xTaskGetTickCount();
+    // Serial.printf("Received CAN Message with id %x, buffer[0] = %x\n", CAN_msg.id, CAN_msg.buf[0]);
     switch (CAN_msg.id) {
       case MOTOR_STATS_MSG:
         decodeMotorStats(CAN_msg, &(context->motor_stats));
@@ -140,33 +156,41 @@ static void checkCAN(CANTaskData canData) {
         break;
       case DD_BMS_STATUS_IND:
         decipherBMSStatus(CAN_msg, &(context->bms_status));
-        //printBMSStatus(context->bms_status);
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case EVCC_STATS:
         decipherEVCCStats(CAN_msg, &(context->charge_controller_stats));
         break;
       case CHARGER_STATS:
         decipherChargerStats(CAN_msg, &(context->charger_stats));
+        break;
       case BMSC1_LTC1_CELLS_04:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC1_CELLS_58:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC1_CELLS_912:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_04:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_58:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case BMSC1_LTC2_CELLS_912:
         decipherCellsVoltage(CAN_msg,  &(context->battery_voltages));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
       case DD_BMSC_TH_STATUS_IND:
         decipherThermistors(CAN_msg, &(context->thermistor_temps));
+        context->last_bms_rx_tick = xTaskGetTickCount();
         break;
     }
   }
@@ -203,7 +227,7 @@ void printBMSStatus(BMSStatus bms_status) {
   if (bms_status.ltc_fault == 1) {
     Serial.printf("LTC fault detected\n");
   }
-  Serial.printf("%d LTCs detected\n");
+  // Serial.printf("%d LTCs detected\n");
 }
 
 void requestCellVoltages() {
@@ -212,7 +236,7 @@ void requestCellVoltages() {
   msg.flags.extended = 1; // set for 29-bit IDs
   msg.id = next_can_id;
   CAN_bus.write(msg);
-  Serial.println("Requested cell voltages");
+  // Serial.println("Requested cell voltages");
 
   if (msg.id == BMSC1_LTC1_REQUEST_CELLS)
     next_can_id = BMSC1_LTC2_REQUEST_CELLS;
@@ -220,17 +244,61 @@ void requestCellVoltages() {
     next_can_id = BMSC1_LTC1_REQUEST_CELLS;
 }
 
+// Broadcast the mainboard's own derived state for the display. Codes only —
+// the display maps (hv_state, fault_reason) to rider-facing tip text. The
+// rolling counter lets the display detect a frozen/dead mainboard.
+static void sendMainboardStatus() {
+  static uint8_t counter = 0;
+  CAN_message_t msg = {};
+  msg.flags.extended = 1;            // 29-bit ID
+  msg.id = MAINBOARD_STATUS_IND;
+  msg.len = MB_STATUS_DLC;
+  msg.buf[MB_STATUS_OFF_HV_STATE]  = (uint8_t)get_hv_state();
+  msg.buf[MB_STATUS_OFF_FAULT]     = get_hv_fault_reason();
+  msg.buf[MB_STATUS_OFF_COUNTER]   = counter++;
+  msg.buf[MB_STATUS_OFF_PRECHARGE] = get_precharge_pct();
+  CAN_bus.write(msg);
+}
+
+// Reinstall the FlexCAN controller after prolonged bus silence (bus-off /
+// transceiver fault). FlexCAN auto-recovers from bus-off by default; this is a
+// belt-and-suspenders restore. The HV safe-state is handled separately by the
+// CAN-1.1 liveness check in isHVSafe(), which trips HV_ERROR while silent.
+static void recoverCAN() {
+  Serial.println("CAN bus silent — reinstalling controller");
+  CAN_bus.reset();
+  CAN_bus.begin();
+  CAN_bus.setBaudRate(250000);
+}
+
 void canTask(void *canData) {
+  Context *context = ((CANTaskData *)canData)->bike_context;
   TickType_t last_request = xTaskGetTickCount();
+  TickType_t last_status  = xTaskGetTickCount();
+  TickType_t last_recovery = xTaskGetTickCount();
   while (1) {
     /* NOTE: CAN breaks if we try sending messages with 0 other nodes on the bus.
     / Therefore, change CAN_NODES in Main.h to make sure things dont break. */
     if (CAN_NODES != 0) {
       checkCAN(*(CANTaskData *)canData);
       /* Ask for other half of cell voltages from BMS every 2 seconds, test timings later to improve boot performance */
-      if (xTaskGetTickCount() > (last_request + 2000)) {
+      if (xTaskGetTickCount() - last_request > pdMS_TO_TICKS(2000)) {
         requestCellVoltages();
         last_request = xTaskGetTickCount();
+      }
+      /* Broadcast mainboard status for the display at MB_STATUS_PERIOD_MS (10 Hz). */
+      if (xTaskGetTickCount() - last_status > pdMS_TO_TICKS(MB_STATUS_PERIOD_MS)) {
+        sendMainboardStatus();
+        last_status = xTaskGetTickCount();
+      }
+      /* Bus-off recovery: if no frame has arrived for CAN_BUS_TIMEOUT_MS, attempt
+         a controller reinstall, rate-limited to once per CAN_BUS_TIMEOUT_MS. */
+      uint32_t last_rx = context->last_can_rx_tick;
+      if (last_rx != 0 &&
+          (xTaskGetTickCount() - last_rx) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS) &&
+          (xTaskGetTickCount() - last_recovery) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS)) {
+        recoverCAN();
+        last_recovery = xTaskGetTickCount();
       }
     }
     // delay 20ms

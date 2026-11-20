@@ -46,7 +46,7 @@ typedef struct {
   float *dataValues;
   data_type D_TYPE;
   bool open;
-  SdFile file;
+  FsFile file;
 } CSVWriter;
 
 #include "CAN.h"

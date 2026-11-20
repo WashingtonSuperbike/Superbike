@@ -4,7 +4,6 @@
 */
 
 #include "GPIO.h"
-#include "Display.h"
 
 bool check_HV_toggle() {
   return !digitalRead(HIGH_VOLTAGE_TOGGLE);
@@ -29,17 +28,7 @@ void close_precharge() {
 
 void initGPIO() {
 
-  /* TODO: remove CLOSE_CONTACTOR_BUTTON, LED outputs, TS_CS */
-
   pinMode(HIGH_VOLTAGE_TOGGLE, arduino::INPUT_PULLUP);
-
-  pinMode(TFT_RST, arduino::OUTPUT);
-  digitalWrite(TFT_RST, arduino::HIGH);
-  pinMode(TFT_CS, arduino::OUTPUT);
-  digitalWrite(TFT_CS, arduino::HIGH);
-
-  pinMode(TS_CS, arduino::OUTPUT);
-  digitalWrite(TS_CS, arduino::HIGH);
 
   pinMode(PRECHARGE_CONTROL, arduino::OUTPUT);
   open_precharge();

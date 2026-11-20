@@ -80,7 +80,11 @@ void handleIncomingMessages() {
     twai_message_t rec_msg;
     // Non-blocking check for messages
     while (twai_receive(&rec_msg, 0) == ESP_OK) {
-        Serial.printf("RX ID: 0x%08X\n", rec_msg.identifier);
+        Serial.printf("RX ID: 0x%08X DLC: %d Data:", rec_msg.identifier, rec_msg.data_length_code);
+        for (int i = 0; i < rec_msg.data_length_code; i++) {
+            Serial.printf(" %02X", rec_msg.data[i]);
+        }
+        Serial.println();
 
         // Prepare generic response template
         twai_message_t send_msg;

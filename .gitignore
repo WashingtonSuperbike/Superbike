@@ -1,10 +1,21 @@
 # Folders
 
-**/.vscode/**
-**/.pio/**
+**/.vscode
+**/.pio
+**/.planning
+**/.claude
+**/.swarm
+**/.claude-flow
+hidden/
 
 
 # Files
+*.db
+
+# Images
+*.png
+*.jpg
+*.jpeg
 
 # Prerequisites
 *.d
@@ -47,3 +58,6 @@
 
 # debug information files
 *.dwo
+
+# Compilation artifacts
+*.yml.orig

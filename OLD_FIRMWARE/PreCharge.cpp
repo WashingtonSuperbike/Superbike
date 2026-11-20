@@ -3,33 +3,29 @@
  * Estimates gyro angle using Kalman filter.
 */
 #include "Precharge.h"
-#include <Wire.h>
 #include "GPIO.h"
+#include "Main.h"
+#include "MainboardProtocol.h"
 
-// I2C is incredibly unstable? Or perhaps not using proper wiring causes this,
-// but the reading in precharge data can often bug out and output
-// "nan" because of randomness? I would personally recommend
-// having some sort of true or false based
-// indicator at the bottom right of the speedometer screen
-// that outputs "true" or something to indicate
-// that the gyro is not bugging out. Or perhaps
-// output the gyro data on the bottom right
-// to indicate danger? Something like that.
-
-// OKAY, MAKE SURE YOU READ THIS IF YOU SEE ISSUES WITH THE GYRO.
-// By my *limited* understanding, I think the problem is that
-// the gyro needs to be consistently powered, hence why proper
-// gyro setup code has a significant delay between
-// turning the thing on and actually reading data from it.
-// An easy way to work around it, is to power on the Teensy
-// and then once everything is up and running,
-// reprogram it by using the button on the board.
-// In the case of the actual race, I would turn on low-voltage
-// and then wait a second and then turn it off and then
-// turn it back on.
+extern TwoWire Wire;
 
 /* Current HV state */
 static HV_STATE hv_state = HV_OFF;
+
+/* Why HV last became unsafe / errored. Written only by the FSM (isHVSafe and the
+ * precharge-timeout branch); read by the CAN task via get_hv_fault_reason() to
+ * populate the MAINBOARD_STATUS frame. */
+static MB_FAULT_REASON hv_fault_reason = MB_FAULT_NONE;
+
+/* Precharge progress 0..100, recomputed each loop; read by the CAN task. */
+static volatile uint8_t mb_precharge_pct = 0;
+
+/* Consistent, FSM-private copy of the CAN-written safety fields. Filled once per
+ * loop under a critical section so isHVSafe()/isPrecharged() never read a struct
+ * the CAN task was halfway through updating. File-scope (not on the task stack)
+ * to keep the precharge stack small; only plain-old-data sub-structs are copied
+ * into it (never logs[]/FsFile). Bug #3 fix. */
+static Context precharge_snapshot;
 
 // Returns true if the motor controller is done precharging.
 // Returns false otherwise.
@@ -39,7 +35,7 @@ bool isPrecharged(PreChargeTaskData preChargeData) {
   MotorStats motor_stats = preChargeData.context->motor_stats;
 
   // Ret false if we haven't received all BMS cell voltages yet
-  if (!(battery_voltages.hv_cell_voltages_ready)) {
+  if (!(battery_voltages.cell_voltages_ready)) {
     return false;
   }
 
@@ -51,25 +47,86 @@ bool isPrecharged(PreChargeTaskData preChargeData) {
           && battery_voltages.hv_series_voltage > 80;
 }
 
-// this function returns true if there are no HV errors detected on the bike
+// Returns true if HV System is safe, false otherwise.
+// Validated 05/29/2026 during Hardware In Loop (HIL) Testing.
+// Any changes to below method require repeat of testing procedure.
+// Do not remove comments relating to HIL testing identifiers.
 bool isHVSafe(PreChargeTaskData preChargeData) {
-  //BMSStatus bmsStatus = preChargeData.bmsStatus;
-  MotorTemps motor_temps = preChargeData.context->motor_temps;
+  // Clear the reason on entry; each failing branch below records its own cause.
+  hv_fault_reason = MB_FAULT_NONE;
 
-  /* !!!! these are commented out now but all of this should be checked when using the real bike !!!!
-    though you will have to determine which of these are emergency HV states. i.e. Which ones should turn off the contactor instantly
-    and which ones should you simply alert the rider?
-    As of now, they all immediately turn off the contactor which may be dangerous for the rider
-  */
+  // The CAN bus must be alive. If no frame of any id has arrived within
+  // CAN_BUS_TIMEOUT_MS (bus-off, transceiver/wiring fault), HV cannot be trusted.
+  // Only enforced after the first frame ever received (boot is covered by the
+  // ltc_count check below, which blocks HV until the BMS comes online).
+  uint32_t last_can = preChargeData.context->last_can_rx_tick;
+  if (last_can != 0 && (xTaskGetTickCount() - last_can) > pdMS_TO_TICKS(CAN_BUS_TIMEOUT_MS)) {
+    hv_fault_reason = MB_FAULT_CAN_BUS;
+    Serial.println("HV unsafe: CAN bus silent (possible bus-off)");
+    return 0;
+  }
 
-  //if (*bmsStatus.ltc_fault == 1) return 0;
-  //if (*bmsStatus.ltc_count != NUMBER_OF_LTCS) return 0;
-  //    the below if can be reduced to if (*bmsStatus.bms_c_fault) which returns true for any non-zero bms_c_fault value
-  //if (*bmsStatus.bms_c_fault == 1 || *bmsStatus.bms_c_fault == 2 || *bmsStatus.bms_c_fault == 4 ||    //checks BMS fault error codes
-  //    *bmsStatus.bms_c_fault == 8) return 0;
-  //if (*bmsStatus.bms_status_flag == 1 || *bmsStatus.bms_status_flag == 2) return 0;  //check if cells are above or below the voltage cutoffs
-  if (motor_temps.motor_controller_temperature >= MOTORCONTROLLER_TEMP_MAX
-      || motor_temps.motor_temperature >= MOTOR_TEMP_MAX)       return 0;
+  // BMS must be actively sending messages. Only checked after first message received
+  // (at boot, ltc_count == 0 != NUMBER_OF_LTCS already blocks HV until BMS comes online).
+  uint32_t last_bms_rx = preChargeData.context->last_bms_rx_tick;
+  if (last_bms_rx != 0 && (xTaskGetTickCount() - last_bms_rx) > pdMS_TO_TICKS(CAN_BMS_TIMEOUT_MS)) {
+    hv_fault_reason = MB_FAULT_BMS_TIMEOUT;
+    Serial.println("BMS timeout: no status message received");
+    return 0;
+  }
+
+  if (preChargeData.context->bms_status.bms_c_fault & 0x06) {
+    // BMS-1.2: Thermistor overtemp fault (0x02) or
+    // BMS-1.8: Cell census fault (cell(s) not detected) (0x04)
+    hv_fault_reason = MB_FAULT_BMS_OVERTEMP;
+    Serial.printf("HV unsafe: BMS c_fault 0x%02X (overtemp/census)\n", preChargeData.context->bms_status.bms_c_fault);
+    return 0;
+  }
+
+  if (preChargeData.context->bms_status.bms_status_flag & 0x03) {
+    // BMS-1.3: High Voltage Cutoff (0x01) or
+    // BMS-1.4: Low Voltage Cutoff reached (0x02)
+    hv_fault_reason = MB_FAULT_BMS_VOLTAGE;
+    Serial.printf("HV unsafe: voltage flag 0x%02X (over/undervoltage)\n", preChargeData.context->bms_status.bms_status_flag);
+    return 0;
+  }
+
+  if (preChargeData.context->bms_status.ltc_fault != 0) {
+    // BMS-1.9: LTC Fault detected
+    hv_fault_reason = MB_FAULT_LTC_FAULT;
+    Serial.println("HV unsafe: LTC fault");
+    return 0;
+  }
+
+  if (preChargeData.context->bms_status.ltc_count != NUMBER_OF_LTCS) {
+    // BMS-1.10: LTC Count does not match configuration
+    hv_fault_reason = MB_FAULT_LTC_COUNT;
+    Serial.printf("HV unsafe: LTC count %d (expected %d)\n", preChargeData.context->bms_status.ltc_count, NUMBER_OF_LTCS);
+    return 0;
+  }
+
+  if (preChargeData.context->motor_stats.error_message & 0x02) {
+    // MC-1.2: High Voltage Fault from Motor Controller
+    hv_fault_reason = MB_FAULT_MC_HV_FAULT;
+    Serial.println("HV unsafe: motor controller HV fault");
+    return 0;
+  }
+
+  if (preChargeData.context->motor_temps.motor_temperature > MOTOR_TEMP_MAX) {
+    // MC-1.5: Motor overtemperature
+    hv_fault_reason = MB_FAULT_MOTOR_OVERTEMP;
+    Serial.printf("HV unsafe: motor temp %.1f > %d C\n", preChargeData.context->motor_temps.motor_temperature, MOTOR_TEMP_MAX);
+    return 0;
+  }
+
+  if (preChargeData.context->motor_temps.motor_controller_temperature > MOTORCONTROLLER_TEMP_MAX) {
+    // MC-1.6: Motor controller overtemperature
+    hv_fault_reason = MB_FAULT_MC_OVERTEMP;
+    Serial.printf("HV unsafe: MC temp %.1f > %d C\n", preChargeData.context->motor_temps.motor_controller_temperature, MOTORCONTROLLER_TEMP_MAX);
+    return 0;
+  }
+
+  // HV system passed safety checks
   return 1;
 }
 
@@ -83,54 +140,91 @@ const char* state_name(HV_STATE state) {
   }
 }
 
+// --- Status accessors for the CAN task (MAINBOARD_STATUS frame) ---
+HV_STATE get_hv_state()        { return hv_state; }
+uint8_t  get_hv_fault_reason() { return (uint8_t)hv_fault_reason; }
+uint8_t  get_precharge_pct()   { return mb_precharge_pct; }
+
+// Estimate precharge progress as motor-controller-bus voltage / pack series
+// voltage. 100% once HV is on, 0% when off/errored. Uses the FSM snapshot.
+static uint8_t compute_precharge_pct(const Context *c) {
+  if (hv_state == HV_ON) return 100;
+  if (hv_state != HV_PRECHARGING) return 0;
+  float series = c->battery_voltages.hv_series_voltage;
+  if (series <= 0.0f) return 0;
+  float pct = (c->motor_stats.motor_controller_battery_voltage / series) * 100.0f;
+  if (pct < 0.0f) pct = 0.0f;
+  if (pct > 100.0f) pct = 100.0f;
+  return (uint8_t)pct;
+}
+
+// Debounces the HV toggle switch. Requires 3 consecutive stable reads (30ms at 10ms task rate)
+// before accepting a state change, filtering out contact bounce and electrical noise.
+static bool debounced_HV_toggle() {
+  static uint8_t count = 0;
+  static bool confirmed = false;
+  bool raw = check_HV_toggle();
+  if (raw != confirmed) {
+    if (++count >= 3) {
+      confirmed = raw;
+      count = 0;
+    }
+  } else {
+    count = 0;
+  }
+  return confirmed;
+}
+
 // NOTE: "input" needs to change to the GPIO value for the on-button for the bike
 void preChargeCircuitFSMTransitions (PreChargeTaskData preChargeData) {
   HV_STATE old_state = hv_state;
   GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+  static TickType_t precharge_start_tick = 0;
+  bool hv_on = debounced_HV_toggle();
   switch (hv_state) { // transitions
     case HV_OFF:
-      if (check_HV_toggle()) {
+      if (hv_on) {
         hv_state = HV_PRECHARGING;
+        precharge_start_tick = xTaskGetTickCount();
       }
       break;
     case HV_PRECHARGING:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
+      else if (xTaskGetTickCount() - precharge_start_tick > pdMS_TO_TICKS(10000)) {
+        Serial.println("Precharge timeout: HV did not reach target voltage within 10s");
+        hv_fault_reason = MB_FAULT_PRECHARGE_TIMEOUT;
+        hv_state = HV_ERROR;
+      }
       else if (!isHVSafe(preChargeData)) {
-        // HV error detected
         hv_state = HV_ERROR;
       }
       else if (isPrecharged(preChargeData)) {
-        // finished precharging
         hv_state = HV_ON;
       }
       else {
-        // no updates, keep precharging
         hv_state = HV_PRECHARGING;
       }
       break;
     case HV_ON:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       }
-      else if (!isHVSafe(preChargeData) || gyro_kalman->angle_Y > 45 || gyro_kalman->angle_Y < -45 || gyro_kalman->angle_X > 45 || gyro_kalman->angle_X < -45) {
-        // HV error detected
+      else if (!isHVSafe(preChargeData)) {
         hv_state = HV_ERROR;
       }
       else {
-        // no updates, keep HV on
         hv_state = HV_ON;
       }
       break;
     case HV_ERROR:
-      if (!check_HV_toggle()) {
+      if (!hv_on) {
         // kill-switch activated or HV switch turned off
         hv_state = HV_OFF;
       } else {
-        // otherwise stay here
         hv_state = HV_ERROR;
       }
       break;
@@ -161,6 +255,7 @@ void preChargeCircuitFSMStateActions () {
     case HV_ERROR:
       open_contactor();
       open_precharge();
+      break;
     default:
       break;
   } // state actions
@@ -404,11 +499,40 @@ void initI2C(GyroKalman *gyro_kalman) {
 
 void preChargeTask(void *taskData) {
   PreChargeTaskData preChargeData = *(PreChargeTaskData *)taskData;
-  GyroKalman *gyro_kalman = &preChargeData.context->gyro_kalman;
+  Context *shared = preChargeData.context;
+  GyroKalman *gyro_kalman = &shared->gyro_kalman;
+
+  // The FSM evaluates safety against the snapshot, not the live shared Context.
+  PreChargeTaskData snapData = { &precharge_snapshot };
 
   while (1) {
+    // Reset the watchdog timer
+    wdt_kick();
+
+    // Atomically copy the CAN-written safety fields into the snapshot. The CAN
+    // task (lower priority) updates these field-by-field and can be preempted
+    // mid-write by this higher-priority task; the critical section guarantees a
+    // self-consistent view for the safety checks below. The copies are small,
+    // trivially-copyable PODs, so the section is only a few hundred ns.
+    taskENTER_CRITICAL();
+    precharge_snapshot.motor_stats      = shared->motor_stats;
+    precharge_snapshot.motor_temps      = shared->motor_temps;
+    precharge_snapshot.bms_status       = shared->bms_status;
+    precharge_snapshot.battery_voltages = shared->battery_voltages;
+    precharge_snapshot.last_bms_rx_tick = shared->last_bms_rx_tick;
+    precharge_snapshot.last_can_rx_tick = shared->last_can_rx_tick;
+    taskEXIT_CRITICAL();
+
+    // Gyro is owned by this task (written below), so no race — copy outside the
+    // critical section to keep snapData self-consistent for any tilt logic.
+    precharge_snapshot.gyro_kalman = shared->gyro_kalman;
+
     preChargeCircuitFSMStateActions();
-    preChargeCircuitFSMTransitions(preChargeData);
+    preChargeCircuitFSMTransitions(snapData);
+
+    // Refresh precharge progress for the CAN status frame (after the transition
+    // so hv_state and the snapshot voltages are current this cycle).
+    mb_precharge_pct = compute_precharge_pct(&precharge_snapshot);
 
     updateGyroData(gyro_kalman);
 

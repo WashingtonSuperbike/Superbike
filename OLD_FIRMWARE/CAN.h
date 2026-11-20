@@ -99,11 +99,10 @@ typedef struct {
  * bms_c_id: cell_id that is reporting a fault
  * bms_c_fault: fault related to cell mentioned above
  * ltc_fault: check datasheet, if ltc is reporting an error
- * ltc_count: how many ltcs are detected, should be 2 for our 20s pack
+ * ltc_count: how many ltcs are detected, should be 2 for our 24s pack
  */
 typedef struct {
-  /* need to change bms_status_flag to int after display feature is completed */
-  float bms_status_flag;
+  int bms_status_flag;
   int bms_c_id;
   int bms_c_fault;
   int ltc_fault;
@@ -115,19 +114,19 @@ typedef struct {
  * temps: temperature of thermistor reported by BMS
  */
 typedef struct {
-  bool temps_valid[CONFIG_THERMISTOR_COUNT];
-  float temps[CONFIG_THERMISTOR_COUNT];
+  bool temps_valid[THERMISTOR_COUNT];
+  float temps[THERMISTOR_COUNT];
 } ThermistorTemps;
 
 /**
- *  hv_cell_voltages_ready: true if cell voltage has been reported by BMS since boot
- *  hv_cell_voltages: HV cell voltages sent by BMS over CAN
- *  hv_series_voltage: sum of hv_cell_voltages, updated whenever new voltages are received over CAN
+ *  cell_voltages_ready: true if cell voltage has been reported by BMS since boot
+ *  cell_voltages: HV cell voltages sent by BMS over CAN
+ *  hv_series_voltage: sum of cell_voltages, updated whenever new voltages are received over CAN
  *  aux_battery_voltage: auxiliary (LV) battery voltage
  */
 typedef struct {
-  bool hv_cell_voltages_ready;
-  float hv_cell_voltages[CONFIG_HV_CELL_COUNT];
+  bool cell_voltages_ready;
+  float cell_voltages[CELL_COUNT];
   float hv_series_voltage;
   float aux_battery_voltage;
 } BatteryVoltages;
