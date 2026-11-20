@@ -6,7 +6,8 @@
 
 int main(void)
 {
-    // Create a measurement structure
+    // TEST 1: Ensuring all groups below the balancing threshold
+    // is set to zero if balancing is not permitted.
     BMSMeasurements measurements = {0};
 
     // Simulate 24 valid cell groups
@@ -36,6 +37,7 @@ int main(void)
 
 
     // TEST 2: One group above the balancing threshold
+    // should be selected for balancing.
 
     // Simulate Group 3 having a higher voltage
     measurements.cell_voltage_v[2] = 3.90f;
@@ -59,6 +61,8 @@ int main(void)
 
 
     // TEST 3: Multiple eligible groups, maximum of 2
+    // four groups above the threshold, but only two should be selected.
+    // of the two, the two with the highest voltages should be selected.
 
     // Reset all 24 groups to 3.80 V
     for (uint32_t i = 0; i < BMS_CELL_COUNT; i++) {
@@ -114,6 +118,8 @@ int main(void)
 
 
     // TEST 5A: Group is between start and stop thresholds
+    // should not be selected for balancing if it was not previously balancing.
+    // EX: between 20 mV and 50 mV above the average, but was not previously balancing.
 
     // Reset all voltages
     for (uint32_t i = 0; i < BMS_CELL_COUNT; i++) {
@@ -140,6 +146,7 @@ int main(void)
 
 
     // TEST 5B: Previously active group remains eligible
+    // EX: between 20 mV and 50 mV above the average, but was previously balancing.
 
     output_mask = 0xFFFFFFFFu;
 

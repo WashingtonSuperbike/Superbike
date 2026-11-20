@@ -8,6 +8,7 @@ CFLAGS = -std=c11 -Wall -Wextra -Werror -Iinclude
 # Source files needed for our balancing test
 SOURCES = src/bms_config.c \
           src/bms_balancing.c \
+		  src/bms_faults.c \
           tests/test_balancing.c
 
 # Header files
